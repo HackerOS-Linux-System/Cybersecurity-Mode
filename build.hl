@@ -1,0 +1,9 @@
+// python3.13
+// cargo
+// crystal
+// shards
+
+> cd source-code
+-> cd main && python -m nuitka --standalone --onefile main.py
+-> cd backend && cargo build --release
+-> shards build
