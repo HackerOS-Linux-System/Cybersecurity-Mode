@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Switch to Cybersecurity Mode
+GenericName=Cybersecurity Session Launcher
+Comment=Switch from KDE Plasma to Cybersecurity Mode session (tty3)
+Exec=/usr/bin/cybersec back mode
+Icon=/usr/share/HackerOS/ICONS/HackerOS.png
+Terminal=false
+Type=Application
+Categories=System;Security;
+Keywords=cybersec;hacker;pentest;security;hackeros;switch;session;
+StartupNotify=false
+X-KDE-RunOnDiscreteGpu=false
