@@ -1,52 +1,8 @@
 // curl
-// podman
 
-> podman pull blackarchlinux/blackarch
-> podman run -d \
-  --name cybersec-mode-env \
-  --privileged \
-  --network host \
-  --security-opt seccomp=unconfined \
-  --cap-add NET_ADMIN \
-  --cap-add NET_RAW \
-  --cap-add SYS_PTRACE \
-  --cap-add SYS_ADMIN \
-  -v /home:/home:rw \
-  -v /tmp/cybersec:/tmp/cybersec:rw \
-  -v /etc/resolv.conf:/etc/resolv.conf:ro \
-  blackarchlinux/blackarch \
-  sleep infinity
-> podman exec cybersec-mode-env bash -c "
-  pacman-key --init
-  pacman-key --populate archlinux blackarch
-  pacman -Sy --noconfirm blackarch-keyring
-  pacman -Syu --noconfirm
-"
-> podman exec cybersec-mode-env pacman -S --noconfirm \
-  nmap masscan rustscan \
-  metasploit \
-  burpsuite sqlmap nikto gobuster feroxbuster ffuf \
-  hydra hashcat john medusa \
-  aircrack-ng airmon-ng-r1 airodump-ng \
-  wireshark-cli tshark tcpdump \
-  netcat ncat hping3 \
-  responder impacket crackmapexec \
-  bloodhound neo4j \
-  linpeas-ng \
-  binwalk volatility3 ghidra radare2 \
-  git curl wget python python-pip \
-  2>/dev/null || echo "Some packages may not be available — check blackarch repo"
-> podman exec cybersec-mode-env pacman -S --noconfirm \
-  suricata snort fail2ban \
-  lynis rkhunter chkrootkit aide \
-  clamav \
-  auditd \
-  openvas \
-  zeek \
-  2>/dev/null || echo "Some packages may not be available"
-> podman exec cybersec-mode-env pip install \
-  pwntools \
-  impacket \
-  bloodhound \
-  2>/dev/null
-> 
+> cd /usr/lib/HackerOS/
+> sudo mkdir Cybersecurity-Mode
+> sudo curl -L --create-dirs -o /usr/lib/HackerOS/Cybersecurity-Mode/cybersec-mode-backend https://github.com/HackerOS-Linux-System/Cybersecurity-Mode/releases/download/v0.1/cybersec-mode-backend \
+-o /usr/lib/HackerOS/Cybersecurity-Mode/cybersec-mode-main https://github.com/HackerOS-Linux-System/Cybersecurity-Mode/releases/download/v0.1/cybersec-mode-main \
+-o /usr/bin/cybersec https://github.com/HackerOS-Linux-System/Cybersecurity-Mode/releases/download/v0.1/cybersec
+> sudo chmod +x /usr/lib/HackerOS/Cybersecurity-Mode/cybersec-mode-backend /usr/lib/HackerOS/Cybersecurity-Mode/cybersec-mode-main /usr/bin/cybersec
