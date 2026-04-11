@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Cybersecurity Mode - Main Entry Point
+Cybersecurity Mode — Main Entry Point v0.1
 HackerOS Cybersecurity Suite
 Python 3.13 + PyQt6
-Compiled with Nuitka -> cybersec-mode-main
+Compiled with Nuitka → cybersec-mode-main
 """
 
 import sys
@@ -15,135 +15,151 @@ import signal
 import logging
 from pathlib import Path
 
-# ── PyQt6 ──────────────────────────────────────────────────────────────────
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QLabel, QPushButton, QFrame, QSplitter,
-    QDialog, QButtonGroup, QRadioButton, QCheckBox, QMessageBox,
-    QSizePolicy, QGraphicsDropShadowEffect
+    QStackedWidget, QLabel, QPushButton, QFrame,
+    QDialog, QCheckBox, QMessageBox, QSizePolicy,
+    QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import (
-    Qt, QThread, pyqtSignal, QTimer, QSize, QPropertyAnimation,
-    QEasingCurve, QProcess, QRect, QPoint
+    Qt, QThread, pyqtSignal, QTimer, QPoint, QProcess
 )
 from PyQt6.QtGui import (
-    QFont, QFontDatabase, QPixmap, QIcon, QColor, QPalette,
-    QLinearGradient, QPainter, QPen, QBrush, QAction, QKeySequence,
-    QShortcut
+    QFont, QPixmap, QIcon, QColor, QShortcut, QKeySequence
 )
 
 # ── Internal modules ────────────────────────────────────────────────────────
-from ui.theme import ThemeManager
-from ui.main_panel import MainPanel
-from ui.terminal_panel import TerminalPanel
-from ui.docs_panel import DocsPanel
-from ui.settings_panel import SettingsPanel
-from ui.sidebar import Sidebar
-from ui.hacker_menu import HackerMenu
-from ui.mode_dialog import ModeSelectionDialog
-from ui.titlebar import TitleBar
-from core.config import ConfigManager
-from core.logger import setup_logger
-from core.ipc import IPCClient
+from ui.theme              import ThemeManager
+from ui.main_panel         import MainPanel
+from ui.terminal_panel     import TerminalPanel
+from ui.docs_panel         import DocsPanel
+from ui.settings_panel     import SettingsPanel
+from ui.sidebar            import Sidebar
+from ui.hacker_menu        import HackerMenu
+from ui.mode_dialog        import ModeSelectionDialog
+from ui.titlebar           import TitleBar
+from ui.first_run_wizard   import FirstRunWizard, ContainerCheckWorker
+from core.config           import ConfigManager
+from core.logger           import setup_logger
+from core.ipc              import IPCClient
 
 
 # ── Constants ───────────────────────────────────────────────────────────────
-APP_NAME        = "Cybersecurity Mode"
-APP_VERSION     = "1.0.0"
-ORG_NAME        = "HackerOS"
-INSTALL_DIR     = Path("/usr/lib/HackerOS/Cybersecurity-Mode")
-CACHE_DIR       = Path.home() / ".cache" / "HackerOS" / "Cybersecurity-Mode"
-LOG_DIR         = Path.home() / ".local" / "share" / "HackerOS" / "Cybersecurity-Mode" / "logs"
-CONFIG_PATH     = CACHE_DIR / "config.json"
-ICON_PATH       = Path("/usr/share/HackerOS/ICONS/HackerOS.png")
-BACKEND_BIN     = INSTALL_DIR / "cybersec-mode-backend"
+
+APP_NAME    = "Cybersecurity Mode"
+APP_VERSION = "0.1"
+ORG_NAME    = "HackerOS"
+
+INSTALL_DIR = Path("/usr/lib/HackerOS/Cybersecurity-Mode")
+CACHE_DIR   = Path.home() / ".cache" / "HackerOS" / "Cybersecurity-Mode"
+LOG_DIR     = Path.home() / ".local" / "share" / "HackerOS" / "Cybersecurity-Mode" / "logs"
+CONFIG_PATH = CACHE_DIR / "config.json"
+ICON_PATH   = Path("/usr/share/HackerOS/ICONS/HackerOS.png")
+BACKEND_BIN = INSTALL_DIR / "cybersec-mode-backend"
+HSH_BIN     = Path("/usr/bin/hsh")
+
+CONTAINER_NAME = "cybersec-mode-env"
 
 
 def setup_environment():
-    """Ensure required directories exist."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+    Path("/tmp/cybersec").mkdir(exist_ok=True)
 
+
+# ── Container check helper ──────────────────────────────────────────────────
+
+def _detect_engine() -> str:
+    import shutil
+    return "podman" if shutil.which("podman") else "docker"
+
+
+def _container_exists(engine: str) -> bool:
+    try:
+        r = subprocess.run(
+            [engine, "inspect", CONTAINER_NAME],
+            capture_output=True, timeout=5
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+# ── Main window ─────────────────────────────────────────────────────────────
 
 class CybersecurityModeApp(QMainWindow):
-    """Main application window."""
-
-    mode_changed = pyqtSignal(str)   # "red" | "blue"
+    mode_changed = pyqtSignal(str)
 
     def __init__(self, config: ConfigManager):
         super().__init__()
-        self.config  = config
-        self.logger  = logging.getLogger("CybersecMode")
-        self.ipc     = IPCClient(BACKEND_BIN)
-        self.theme   = ThemeManager(config.get("theme", "dark_gray"))
+        self.config = config
+        self.logger = logging.getLogger("CybersecMode")
+        self.ipc    = IPCClient(BACKEND_BIN)
+        self.theme  = ThemeManager(config.get("theme", "dark_gray"))
 
         self._build_ui()
         self._apply_theme()
         self._connect_signals()
+        self._setup_shortcuts()
         self._start_backend()
 
-    # ── UI construction ────────────────────────────────────────────────────
+    # ── Build ─────────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        self.setWindowTitle(APP_NAME)
+        self.setWindowTitle(f"{APP_NAME}  v{APP_VERSION}")
         self.setMinimumSize(1280, 800)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
-
-        # Load icon
         if ICON_PATH.exists():
             self.setWindowIcon(QIcon(str(ICON_PATH)))
 
-        # Root widget
         root = QWidget()
         self.setCentralWidget(root)
-        root_layout = QVBoxLayout(root)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.setSpacing(0)
+        rl = QVBoxLayout(root)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(0)
 
-        # Custom title bar
+        # Title bar
         self.titlebar = TitleBar(self, APP_NAME, ICON_PATH, self.config)
-        root_layout.addWidget(self.titlebar)
+        rl.addWidget(self.titlebar)
 
-        # Body: sidebar + content
-        body = QWidget()
-        body_layout = QHBoxLayout(body)
-        body_layout.setContentsMargins(0, 0, 0, 0)
-        body_layout.setSpacing(0)
+        # Body
+        body  = QWidget()
+        body_l = QHBoxLayout(body)
+        body_l.setContentsMargins(0, 0, 0, 0)
+        body_l.setSpacing(0)
 
         self.sidebar = Sidebar(self.config)
-        body_layout.addWidget(self.sidebar)
+        body_l.addWidget(self.sidebar)
 
-        # Stacked content panels
-        self.stack = QStackedWidget()
-        self.panel_main     = MainPanel(self.config, self.ipc)
-        self.panel_terminal = TerminalPanel(self.config)
-        self.panel_docs     = DocsPanel(self.config)
-        self.panel_settings = SettingsPanel(self.config, self.theme)
+        # Panels
+        self.stack         = QStackedWidget()
+        self.panel_main    = MainPanel(self.config, self.ipc)
+        self.panel_terminal= TerminalPanel(self.config)
+        self.panel_docs    = DocsPanel(self.config)
+        self.panel_settings= SettingsPanel(self.config, self.theme)
 
-        self.stack.addWidget(self.panel_main)       # index 0
-        self.stack.addWidget(self.panel_terminal)   # index 1
-        self.stack.addWidget(self.panel_docs)       # index 2
-        self.stack.addWidget(self.panel_settings)   # index 3
+        self.stack.addWidget(self.panel_main)       # 0
+        self.stack.addWidget(self.panel_terminal)   # 1
+        self.stack.addWidget(self.panel_docs)       # 2
+        self.stack.addWidget(self.panel_settings)   # 3
 
-        body_layout.addWidget(self.stack)
-        root_layout.addWidget(body)
+        body_l.addWidget(self.stack)
+        rl.addWidget(body)
 
-        # Hacker Menu (bottom-left, overlay)
+        # Hacker menu overlay
         self.hacker_menu = HackerMenu(self)
         self.hacker_menu.hide()
 
-        # Status bar
-        self._build_statusbar(root_layout)
+        # Status / bottom bar
+        self._build_status_bar(rl)
 
-    def _build_statusbar(self, parent_layout: QVBoxLayout):
+    def _build_status_bar(self, parent_layout: QVBoxLayout):
         bar = QFrame()
         bar.setObjectName("statusBar")
         bar.setFixedHeight(32)
-        bl = QHBoxLayout(bar)
+        bl  = QHBoxLayout(bar)
         bl.setContentsMargins(12, 0, 12, 0)
 
-        # Hacker Menu button (bottom-left)
         self.btn_hacker_menu = QPushButton("⚡ Hacker Menu")
         self.btn_hacker_menu.setObjectName("hackerMenuBtn")
         self.btn_hacker_menu.setFixedHeight(24)
@@ -151,12 +167,27 @@ class CybersecurityModeApp(QMainWindow):
 
         bl.addStretch()
 
-        # Mode indicator
+        # Back-mode button: visible only in TTY session
+        if os.environ.get("CYBERSEC_SESSION") == "1":
+            self.btn_back_mode = QPushButton("⇄ Switch Back")
+            self.btn_back_mode.setFixedHeight(24)
+            self.btn_back_mode.setStyleSheet(
+                "QPushButton { background: transparent; border: 1px solid #3b82f655; "
+                "color: #3b82f6; font-size: 11px; font-weight: 700; "
+                "border-radius: 3px; padding: 0 8px; }"
+                "QPushButton:hover { background: #3b82f622; }"
+            )
+            self.btn_back_mode.setToolTip(
+                "Switch back to KDE Plasma session (tty2) "
+                "or run: cybersec back kde"
+            )
+            self.btn_back_mode.clicked.connect(self._switch_back)
+            bl.addWidget(self.btn_back_mode)
+
         self.lbl_mode = QLabel()
         self._refresh_mode_label()
         bl.addWidget(self.lbl_mode)
 
-        # Version
         lbl_ver = QLabel(f"v{APP_VERSION}")
         lbl_ver.setObjectName("versionLabel")
         bl.addWidget(lbl_ver)
@@ -164,27 +195,25 @@ class CybersecurityModeApp(QMainWindow):
         parent_layout.addWidget(bar)
 
     def _refresh_mode_label(self):
-        mode = self.config.get("mode", "red")
+        mode  = self.config.get("mode", "red")
         color = "#ef4444" if mode == "red" else "#3b82f6"
         icon  = "🔴" if mode == "red" else "🔵"
         self.lbl_mode.setText(f"{icon} {mode.upper()} MODE  |  ")
-        self.lbl_mode.setStyleSheet(f"color: {color}; font-weight: 700; font-size: 11px;")
+        self.lbl_mode.setStyleSheet(
+            f"color: {color}; font-weight: 700; font-size: 11px;"
+        )
 
-    # ── Theme ──────────────────────────────────────────────────────────────
+    # ── Theme ─────────────────────────────────────────────────────────────
 
     def _apply_theme(self):
         self.setStyleSheet(self.theme.generate_stylesheet())
 
-    # ── Signals ────────────────────────────────────────────────────────────
+    # ── Signals ───────────────────────────────────────────────────────────
 
     def _connect_signals(self):
-        # Sidebar navigation
         self.sidebar.navigate.connect(self.stack.setCurrentIndex)
-
-        # Hacker menu toggle
         self.btn_hacker_menu.clicked.connect(self._toggle_hacker_menu)
 
-        # Hacker menu actions
         self.hacker_menu.switch_plasma.connect(self._switch_to_plasma)
         self.hacker_menu.restart_app.connect(self._restart_app)
         self.hacker_menu.shutdown_sys.connect(lambda: self._sys_action("poweroff"))
@@ -192,49 +221,82 @@ class CybersecurityModeApp(QMainWindow):
         self.hacker_menu.update_sys.connect(self._run_update)
         self.hacker_menu.change_mode.connect(self._change_mode)
 
-        # Settings theme change
         self.panel_settings.theme_changed.connect(self._on_theme_changed)
-
-        # Mode change propagation
         self.mode_changed.connect(self.panel_main.on_mode_changed)
         self.mode_changed.connect(self.panel_terminal.on_mode_changed)
 
-        # Title bar
         self.titlebar.close_requested.connect(self.close)
         self.titlebar.minimize_requested.connect(self.showMinimized)
         self.titlebar.maximize_requested.connect(self._toggle_maximize)
 
-    # ── Backend ────────────────────────────────────────────────────────────
+    def _setup_shortcuts(self):
+        kb = self.config.get("keybindings", {})
+        bindings = [
+            (kb.get("toggle_main",     "Ctrl+M"), lambda: self.stack.setCurrentIndex(0)),
+            (kb.get("toggle_terminal", "Ctrl+T"), lambda: self.stack.setCurrentIndex(1)),
+            (kb.get("toggle_docs",     "Ctrl+D"), lambda: self.stack.setCurrentIndex(2)),
+            (kb.get("toggle_settings", "Ctrl+,"), lambda: self.stack.setCurrentIndex(3)),
+            (kb.get("hacker_menu",     "Ctrl+H"), self._toggle_hacker_menu),
+        ]
+        for seq, fn in bindings:
+            try:
+                sc = QShortcut(QKeySequence(seq), self)
+                sc.activated.connect(fn)
+            except Exception:
+                pass
+
+    # ── Backend ───────────────────────────────────────────────────────────
 
     def _start_backend(self):
         if BACKEND_BIN.exists():
             self.ipc.start()
             self.logger.info("Backend IPC started")
         else:
-            self.logger.warning(f"Backend binary not found: {BACKEND_BIN}")
+            self.logger.warning(f"Backend not found: {BACKEND_BIN}")
 
-    # ── Actions ────────────────────────────────────────────────────────────
+    # ── Hacker menu ───────────────────────────────────────────────────────
 
     def _toggle_hacker_menu(self):
         if self.hacker_menu.isVisible():
             self.hacker_menu.hide()
         else:
             btn_pos = self.btn_hacker_menu.mapToGlobal(QPoint(0, 0))
-            menu_h  = 300
-            self.hacker_menu.move(
-                btn_pos.x(),
-                btn_pos.y() - menu_h - 4
-            )
+            self.hacker_menu.move(btn_pos.x(), btn_pos.y() - 310 - 4)
             self.hacker_menu.show()
             self.hacker_menu.raise_()
 
+    # ── Actions ───────────────────────────────────────────────────────────
+
     def _switch_to_plasma(self):
-        is_session = os.environ.get("XDG_SESSION_TYPE") or os.environ.get("CYBERSEC_SESSION")
+        is_session = os.environ.get("CYBERSEC_SESSION") == "1"
         if not is_session:
-            QMessageBox.warning(self, "Not in session",
-                "Switch to Plasma is only available when running as a Cybersecurity Mode session.")
+            QMessageBox.warning(
+                self, "Not in session",
+                "Switch to Plasma only works in a Cybersecurity Mode Wayland session."
+            )
             return
-        subprocess.Popen(["startplasma-wayland"])
+        self._do_switch_back("kde")
+
+    def _switch_back(self):
+        """Called by the 'Switch Back' button in status bar (session mode only)."""
+        self._do_switch_back("kde")
+
+    def _do_switch_back(self, target: str):
+        """
+        Switch back to KDE Plasma on tty2, or start it.
+        Logic mirrors: cybersec back kde
+        """
+        if target == "kde":
+            # Try switching to tty2 (where KDE plasma should be)
+            tty_script = (
+                "if loginctl list-sessions | grep -q seat0; then "
+                "  chvt 2 2>/dev/null || true; "
+                "else "
+                "  startplasma-wayland &; "
+                "  chvt 2 2>/dev/null || true; "
+                "fi"
+            )
+            subprocess.Popen(["bash", "-c", tty_script])
 
     def _restart_app(self):
         QApplication.quit()
@@ -259,19 +321,17 @@ class CybersecurityModeApp(QMainWindow):
         dlg = ModeSelectionDialog(self, self.config, force=True)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self._refresh_mode_label()
+            self.titlebar.refresh_mode()
             self.mode_changed.emit(self.config.get("mode", "red"))
 
-    def _on_theme_changed(self, theme_name: str):
-        self.theme.set_theme(theme_name)
+    def _on_theme_changed(self, name: str):
+        self.theme.set_theme(name)
         self.setStyleSheet(self.theme.generate_stylesheet())
 
     def _toggle_maximize(self):
-        if self.isMaximized():
-            self.showNormal()
-        else:
-            self.showMaximized()
+        self.showNormal() if self.isMaximized() else self.showMaximized()
 
-    # ── Cleanup ────────────────────────────────────────────────────────────
+    # ── Cleanup ───────────────────────────────────────────────────────────
 
     def closeEvent(self, event):
         self.ipc.stop()
@@ -280,6 +340,20 @@ class CybersecurityModeApp(QMainWindow):
 
 
 # ── Entry point ─────────────────────────────────────────────────────────────
+
+def should_run_wizard(config: ConfigManager) -> bool:
+    """Return True if the first-run wizard should be shown."""
+    # Already completed?
+    if config.get("container_setup_done") == "true":
+        return False
+    # Check if container already exists
+    engine = _detect_engine()
+    if _container_exists(engine):
+        config.set("container_setup_done", "true")
+        config.save()
+        return False
+    return True
+
 
 def main():
     setup_environment()
@@ -292,20 +366,27 @@ def main():
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(ORG_NAME)
     app.setApplicationVersion(APP_VERSION)
+    # Qt6 handles HiDPI automatically
 
-    # Qt6 handles HiDPI automatically — AA_UseHighDpiPixmaps removed in Qt6
+    # ── First-run wizard ──────────────────────────────────────────────────
+    if should_run_wizard(config):
+        logger.info("Container not found — showing first-run wizard")
+        wizard = FirstRunWizard(config)
+        result = wizard.exec()
+        if result != QDialog.DialogCode.Accepted:
+            logger.info("Wizard cancelled — continuing without container")
 
-    # Mode selection dialog (first run or always_ask)
+    # ── Mode selection ────────────────────────────────────────────────────
     always_ask = config.get("always_ask_mode", True)
     mode_set   = config.get("mode") is not None
 
     if always_ask or not mode_set:
         dlg = ModeSelectionDialog(None, config)
         if dlg.exec() != QDialog.DialogCode.Accepted:
-            # User closed dialog without choosing — default red
             config.set("mode", "red")
         config.save()
 
+    # ── Launch main window ────────────────────────────────────────────────
     window = CybersecurityModeApp(config)
     window.showMaximized()
 
