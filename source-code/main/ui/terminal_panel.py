@@ -1,70 +1,66 @@
 from __future__ import annotations
 import os
-import pty
-import select
 import shutil
+import subprocess
+import threading
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QPlainTextEdit, QLineEdit, QFrame, QSplitter, QSizePolicy,
-    QComboBox
+    QPlainTextEdit, QLineEdit, QFrame, QSizePolicy, QComboBox,
+    QSplitter
 )
-from PyQt6.QtCore import (
-    Qt, QThread, pyqtSignal, pyqtSlot, QTimer, QProcess
-)
-from PyQt6.QtGui import QFont, QTextCursor, QColor, QKeyEvent
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QTimer, QProcess
+from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat
 
+HSH_BIN   = "/usr/bin/hsh"
+BASH_BIN  = "/bin/bash"
+TERM_FONT = "JetBrains Mono, Fira Code, Cascadia Code, monospace"
 
-TERM_STYLE = """
-QPlainTextEdit {
-    background-color: #0a0a0a;
-    color: #00e87a;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+TERM_OUTPUT_STYLE = f"""
+QPlainTextEdit {{
+    background-color: #0c0d0f;
+    color: #c8ffc8;
+    font-family: {TERM_FONT};
     font-size: 13px;
     border: none;
-    padding: 8px;
-    selection-background-color: #1a4a2a;
-}
+    padding: 10px 14px;
+    selection-background-color: #1a3a1a;
+    line-height: 1.4;
+}}
 """
 
-INPUT_STYLE = """
-QLineEdit {
-    background-color: #0a0a0a;
-    color: #00e87a;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+TERM_INPUT_STYLE = f"""
+QLineEdit {{
+    background-color: #0c0d0f;
+    color: #22e87a;
+    font-family: {TERM_FONT};
     font-size: 13px;
     border: none;
-    border-top: 1px solid #1e1e1e;
-    padding: 6px 10px;
-}
-"""
-
-HEADER_STYLE = """
-QFrame {
-    background-color: #111;
-    border-bottom: 1px solid #1e1e1e;
-}
+    border-top: 1px solid #1e2028;
+    padding: 7px 12px;
+}}
+QLineEdit:focus {{ border-top-color: #2a2a38; }}
 """
 
 
-class ShellProcess(QThread):
-    """Runs a subprocess and emits its stdout line by line."""
-    output = pyqtSignal(str)
-    finished = pyqtSignal(int)
+class ShellWorker(QThread):
+    """Runs a shell process, emits output lines."""
+    line_received = pyqtSignal(str)
+    process_ended = pyqtSignal(int)
 
-    def __init__(self, cmd: list[str], env: dict = None):
+    def __init__(self, cmd: list[str]):
         super().__init__()
-        self._cmd = cmd
-        self._env = env
-        self._proc = None
+        self._cmd  = cmd
+        self._proc: subprocess.Popen | None = None
+        self._lock = threading.Lock()
 
     def run(self):
-        import subprocess
-        env = os.environ.copy()
-        if self._env:
-            env.update(self._env)
         try:
+            env = os.environ.copy()
+            env["TERM"] = "xterm-256color"
+            env["COLORTERM"] = "truecolor"
+
             self._proc = subprocess.Popen(
                 self._cmd,
                 stdout=subprocess.PIPE,
@@ -73,180 +69,244 @@ class ShellProcess(QThread):
                 env=env,
                 text=True,
                 bufsize=1,
+                errors="replace",
             )
             for line in iter(self._proc.stdout.readline, ""):
-                self.output.emit(line.rstrip("\n"))
+                self.line_received.emit(line.rstrip("\n"))
             self._proc.wait()
-            self.finished.emit(self._proc.returncode)
+            self.process_ended.emit(self._proc.returncode)
+        except FileNotFoundError as e:
+            self.line_received.emit(f"[ERROR] Command not found: {e}")
+            self.process_ended.emit(127)
         except Exception as e:
-            self.output.emit(f"[ERROR] {e}")
-            self.finished.emit(1)
+            self.line_received.emit(f"[ERROR] {e}")
+            self.process_ended.emit(1)
 
-    def write(self, data: str):
-        if self._proc and self._proc.stdin:
-            try:
-                self._proc.stdin.write(data + "\n")
-                self._proc.stdin.flush()
-            except Exception:
-                pass
+    def send(self, text: str):
+        with self._lock:
+            if self._proc and self._proc.stdin and not self._proc.stdin.closed:
+                try:
+                    self._proc.stdin.write(text + "\n")
+                    self._proc.stdin.flush()
+                except BrokenPipeError:
+                    pass
 
     def terminate(self):
-        if self._proc:
-            self._proc.terminate()
+        with self._lock:
+            if self._proc:
+                try:
+                    self._proc.terminate()
+                except Exception:
+                    pass
 
 
-class TerminalWidget(QWidget):
-    """Single terminal instance."""
+class TerminalTab(QWidget):
+    """A single terminal tab: output + input line."""
 
-    def __init__(self, title: str, config):
+    def __init__(self, tab_id: int, config):
         super().__init__()
+        self._id      = tab_id
         self._config  = config
-        self._title   = title
         self._history: list[str] = []
-        self._hist_idx = -1
-        self._shell   = None
+        self._hist_i  = -1
+        self._worker: ShellWorker | None = None
 
+        self._build()
+        self._start_shell()
+
+    # ── Build ─────────────────────────────────────────────────────────────
+
+    def _build(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Header bar
-        hdr = QFrame()
-        hdr.setFixedHeight(32)
-        hdr.setStyleSheet(HEADER_STYLE)
-        hdr_l = QHBoxLayout(hdr)
-        hdr_l.setContentsMargins(10, 0, 10, 0)
-
-        lbl = QLabel(f"● {title}")
-        lbl.setStyleSheet("color: #22c55e; font-size: 11px; font-weight: 700; font-family: monospace;")
-        hdr_l.addWidget(lbl)
-        hdr_l.addStretch()
-
-        btn_clear = QPushButton("Clear")
-        btn_clear.setFixedHeight(22)
-        btn_clear.setStyleSheet(
-            "background: #1e1e1e; border: 1px solid #2e2e2e; "
-            "color: #666; font-size: 10px; border-radius: 3px; padding: 0 8px;"
-        )
-        btn_clear.clicked.connect(self._clear)
-        hdr_l.addWidget(btn_clear)
-
-        layout.addWidget(hdr)
-
-        # Output display
+        # Output
         self.output = QPlainTextEdit()
         self.output.setReadOnly(True)
-        self.output.setStyleSheet(TERM_STYLE)
-        self.output.setMaximumBlockCount(10_000)
+        self.output.setStyleSheet(TERM_OUTPUT_STYLE)
+        self.output.setMaximumBlockCount(20_000)
+        self.output.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         layout.addWidget(self.output)
 
-        # Input line
+        # Input row
         input_row = QHBoxLayout()
         input_row.setContentsMargins(0, 0, 0, 0)
         input_row.setSpacing(0)
 
-        prompt = QLabel(" $ ")
-        prompt.setStyleSheet(
-            "color: #22c55e; font-family: 'JetBrains Mono', monospace; "
-            "font-size: 13px; background: #0a0a0a; padding: 6px 0 6px 10px;"
-        )
-        input_row.addWidget(prompt)
+        self._prompt_label = QLabel()
+        self._update_prompt()
+        input_row.addWidget(self._prompt_label)
 
         self.input_line = QLineEdit()
-        self.input_line.setStyleSheet(INPUT_STYLE)
+        self.input_line.setStyleSheet(TERM_INPUT_STYLE)
+        self.input_line.setPlaceholderText("")
         self.input_line.returnPressed.connect(self._submit)
         self.input_line.installEventFilter(self)
         input_row.addWidget(self.input_line)
-
         layout.addLayout(input_row)
 
         self._print_banner()
-        self._start_shell()
+
+    def _update_prompt(self):
+        mode  = self._config.get("mode", "red")
+        shell = self._get_shell_name()
+        color = "#ef4444" if mode == "red" else "#3b82f6"
+        sym   = "⚔" if mode == "red" else "🛡"
+        self._prompt_label.setText(f"  {sym} {shell} ❯  ")
+        self._prompt_label.setStyleSheet(
+            f"color: {color}; font-family: {TERM_FONT}; font-size: 13px; "
+            f"background: #0c0d0f; padding: 7px 0 7px 12px; font-weight: 700;"
+        )
+
+    def _get_shell_name(self) -> str:
+        shell = self._config.get("shell", "hsh")
+        if shell == "hsh" and Path(HSH_BIN).exists():
+            return "hsh"
+        return "bash"
 
     def _print_banner(self):
         mode  = self._config.get("mode", "red")
-        color = "🔴" if mode == "red" else "🔵"
-        self._append(
-            f"╔══════════════════════════════════════════╗\n"
-            f"║   Cybersecurity Mode Terminal  {color}         ║\n"
-            f"║   HackerOS  |  Container: blackarch      ║\n"
-            f"╚══════════════════════════════════════════╝\n"
-            f"Type 'help' for available commands.\n"
+        sym   = "⚔  RED MODE" if mode == "red" else "🛡  BLUE MODE"
+        shell = HSH_BIN if Path(HSH_BIN).exists() else BASH_BIN
+        self._append_plain(
+            f"╔══════════════════════════════════════════════════════╗\n"
+            f"║   Cybersecurity Mode v0.1  ─  {sym:<21}║\n"
+            f"║   Container: blackarchlinux/blackarch                ║\n"
+            f"║   Shell: {shell:<44}║\n"
+            f"╚══════════════════════════════════════════════════════╝\n"
         )
 
-    def _start_shell(self):
-        """Start shell inside podman container."""
+    # ── Shell ─────────────────────────────────────────────────────────────
+
+    def _build_cmd(self) -> list[str]:
         engine    = self._config.get("container_engine", "podman")
         container = self._config.get("container_name", "cybersec-mode-env")
-        shell     = self._config.get("shell", "bash")
+
+        # Determine shell: prefer hsh
+        if Path(HSH_BIN).exists():
+            inner_shell = HSH_BIN
+        else:
+            inner_shell = BASH_BIN
 
         if shutil.which(engine):
-            cmd = [engine, "exec", "-it", container, shell]
+            # Run inner_shell inside the container
+            return [engine, "exec", "-it", container, inner_shell]
         else:
-            cmd = [shell]
+            # Fallback: run locally
+            return [inner_shell]
 
-        self._shell = ShellProcess(cmd)
-        self._shell.output.connect(self._append)
-        self._shell.finished.connect(lambda rc: self._append(f"\n[Process exited: {rc}]"))
-        self._shell.start()
+    def _start_shell(self):
+        cmd = self._build_cmd()
+        self._append_plain(f"$ {' '.join(cmd)}\n\n")
+        self._worker = ShellWorker(cmd)
+        self._worker.line_received.connect(self._on_line)
+        self._worker.process_ended.connect(self._on_exit)
+        self._worker.start()
+
+    @pyqtSlot(str)
+    def _on_line(self, line: str):
+        self._append_plain(line)
+
+    @pyqtSlot(int)
+    def _on_exit(self, code: int):
+        self._append_plain(f"\n[Process exited: {code}]\n")
+
+    # ── Input ─────────────────────────────────────────────────────────────
 
     def _submit(self):
-        cmd = self.input_line.text().strip()
-        if not cmd:
-            return
-        self._history.append(cmd)
-        self._hist_idx = len(self._history)
+        cmd = self.input_line.text()
         self.input_line.clear()
-        self._append(f"$ {cmd}")
-
-        if cmd == "clear":
-            self._clear()
+        if not cmd.strip():
             return
 
-        if self._shell and self._shell.isRunning():
-            self._shell.write(cmd)
+        self._history.append(cmd)
+        self._hist_i = len(self._history)
+
+        self._append_colored(f"❯ {cmd}", "#3a4a3a")
+
+        # Handle built-ins
+        if cmd.strip() == "clear":
+            self.output.clear()
+            return
+        if cmd.strip() == "exit":
+            if self._worker:
+                self._worker.terminate()
+            self._append_plain("\n[Session closed]\n")
+            return
+
+        if self._worker and self._worker.isRunning():
+            self._worker.send(cmd)
         else:
+            self._append_plain("[Shell not running — restarting…]\n")
             self._start_shell()
-            if self._shell:
-                self._shell.write(cmd)
+            if self._worker:
+                QTimer.singleShot(500, lambda: self._worker.send(cmd) if self._worker else None)
 
-    def _append(self, text: str):
-        self.output.moveCursor(QTextCursor.MoveOperation.End)
-        self.output.insertPlainText(text + "\n")
-        self.output.moveCursor(QTextCursor.MoveOperation.End)
+    def _append_plain(self, text: str):
+        cursor = self.output.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.insertText(text)
+        self.output.setTextCursor(cursor)
+        self.output.ensureCursorVisible()
 
-    def _clear(self):
-        self.output.clear()
+    def _append_colored(self, text: str, bg_color: str = ""):
+        cursor = self.output.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        fmt = QTextCharFormat()
+        if bg_color:
+            fmt.setForeground(QColor("#5a6a5a"))
+        cursor.insertText(text + "\n", fmt)
+        self.output.setTextCursor(cursor)
+        self.output.ensureCursorVisible()
 
     def run_command(self, cmd: str):
+        """External call to run a command programmatically."""
         self.input_line.setText(cmd)
         self._submit()
 
     def eventFilter(self, obj, event):
-        if obj == self.input_line and event.type() == event.Type.KeyPress:
-            key = event.key()
-            if key == Qt.Key.Key_Up and self._history:
-                self._hist_idx = max(0, self._hist_idx - 1)
-                self.input_line.setText(self._history[self._hist_idx])
-            elif key == Qt.Key.Key_Down:
-                self._hist_idx = min(len(self._history), self._hist_idx + 1)
-                if self._hist_idx < len(self._history):
-                    self.input_line.setText(self._history[self._hist_idx])
-                else:
-                    self.input_line.clear()
+        if obj == self.input_line:
+            if event.type() == event.Type.KeyPress:
+                key = event.key()
+                if key == Qt.Key.Key_Up and self._history:
+                    self._hist_i = max(0, self._hist_i - 1)
+                    self.input_line.setText(self._history[self._hist_i])
+                    return True
+                elif key == Qt.Key.Key_Down:
+                    self._hist_i = min(len(self._history), self._hist_i + 1)
+                    if self._hist_i < len(self._history):
+                        self.input_line.setText(self._history[self._hist_i])
+                    else:
+                        self.input_line.clear()
+                    return True
+                elif key == Qt.Key.Key_L and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+                    self.output.clear()
+                    return True
         return super().eventFilter(obj, event)
 
+    @pyqtSlot(str)
     def on_mode_changed(self, mode: str):
-        pass  # terminal is mode-agnostic
+        self._update_prompt()
+
+    def closeEvent(self, event):
+        if self._worker:
+            self._worker.terminate()
+        event.accept()
 
 
 class TerminalPanel(QWidget):
-    """Panel containing multiple terminal tabs / split view."""
+    """
+    Terminal panel — multiple tabs, tab management, shell info bar.
+    Uses /usr/bin/hsh inside the BlackArch container.
+    """
 
     def __init__(self, config):
         super().__init__()
-        self._config = config
-        self._terminals: list[TerminalWidget] = []
+        self._config   = config
+        self._tabs: list[TerminalTab] = []
+        self._current  = 0
+        self._tab_count = 1
         self._build()
 
     def _build(self):
@@ -254,46 +314,118 @@ class TerminalPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Tab bar + add button
+        # ── Tab bar ───────────────────────────────────────────────────────
         tab_bar = QFrame()
-        tab_bar.setFixedHeight(36)
-        tab_bar.setStyleSheet("background: #111; border-bottom: 1px solid #1e1e1e;")
-        tab_l = QHBoxLayout(tab_bar)
-        tab_l.setContentsMargins(8, 0, 8, 0)
-        tab_l.setSpacing(4)
+        tab_bar.setFixedHeight(38)
+        tab_bar.setStyleSheet("QFrame { background: #0e0f12; border-bottom: 1px solid #1e2028; }")
+        tbl = QHBoxLayout(tab_bar)
+        tbl.setContentsMargins(8, 0, 8, 0)
+        tbl.setSpacing(4)
 
-        self._tab_label = QLabel("Terminal 1")
-        self._tab_label.setStyleSheet(
-            "color: #22c55e; font-size: 12px; font-weight: 700; "
-            "background: #1e1e1e; padding: 4px 12px; border-radius: 3px;"
+        self._tab_buttons: list[QPushButton] = []
+        self._tab_buttons_layout = tbl
+
+        self._add_tab_btn("Terminal 1")
+
+        tbl.addStretch()
+
+        # Shell indicator
+        shell_name = "hsh" if Path(HSH_BIN).exists() else "bash"
+        lbl_shell = QLabel(f"  {shell_name}  ")
+        lbl_shell.setStyleSheet(
+            "color: #22c55e; font-size: 10px; font-weight: 700; font-family: monospace; "
+            "background: #0a120a; border: 1px solid #22c55e33; border-radius: 3px; "
+            "padding: 2px 0;"
         )
-        tab_l.addWidget(self._tab_label)
-        tab_l.addStretch()
+        lbl_shell.setToolTip(f"Shell: {HSH_BIN if shell_name == 'hsh' else BASH_BIN}")
+        tbl.addWidget(lbl_shell)
 
-        btn_new = QPushButton("+ New")
-        btn_new.setFixedHeight(26)
+        # New terminal button
+        btn_new = QPushButton("＋")
+        btn_new.setFixedSize(28, 26)
         btn_new.setStyleSheet(
-            "background: #1e1e1e; border: 1px solid #2e2e2e; "
-            "color: #666; font-size: 11px; border-radius: 3px; padding: 0 10px;"
+            "QPushButton { background: transparent; border: 1px solid #2a2a38; "
+            "color: #555; border-radius: 4px; font-size: 14px; }"
+            "QPushButton:hover { background: #1e1e28; color: #aaa; }"
         )
-        btn_new.clicked.connect(self._new_terminal)
-        tab_l.addWidget(btn_new)
+        btn_new.setToolTip("New terminal tab")
+        btn_new.clicked.connect(self._new_tab)
+        tbl.addWidget(btn_new)
 
         layout.addWidget(tab_bar)
 
-        # Terminal widget
-        self._term = TerminalWidget("cybersec-mode-env", self._config)
-        layout.addWidget(self._term)
-        self._terminals.append(self._term)
+        # ── Tab content area ───────────────────────────────────────────────
+        self._content = QWidget()
+        self._content_layout = QVBoxLayout(self._content)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setSpacing(0)
+        layout.addWidget(self._content)
 
-    def _new_terminal(self):
-        # Placeholder: in production would open new tab/split
-        self._term.run_command("echo '[New terminal session]'")
+        # Create first tab
+        self._create_terminal()
+
+    def _add_tab_btn(self, label: str) -> QPushButton:
+        idx = len(self._tab_buttons)
+        btn = QPushButton(label)
+        btn.setFixedHeight(26)
+        btn.setStyleSheet(self._tab_btn_style(active=idx == self._current))
+        btn.clicked.connect(lambda _, i=idx: self._switch_tab(i))
+        # Insert before the stretch
+        insert_at = len(self._tab_buttons)
+        self._tab_buttons_layout.insertWidget(insert_at, btn)
+        self._tab_buttons.append(btn)
+        return btn
+
+    def _tab_btn_style(self, active: bool) -> str:
+        if active:
+            return (
+                "QPushButton { background: #161820; border: 1px solid #2a2a38; "
+                "color: #22c55e; border-radius: 4px; padding: 0 12px; "
+                "font-size: 11px; font-weight: 700; }"
+            )
+        return (
+            "QPushButton { background: transparent; border: 1px solid transparent; "
+            "color: #444; border-radius: 4px; padding: 0 12px; font-size: 11px; }"
+            "QPushButton:hover { background: #161820; color: #777; }"
+        )
+
+    def _create_terminal(self) -> TerminalTab:
+        tab = TerminalTab(len(self._tabs), self._config)
+        self._tabs.append(tab)
+        self._content_layout.addWidget(tab)
+
+        if len(self._tabs) > 1:
+            tab.hide()
+
+        return tab
+
+    def _new_tab(self):
+        self._tab_count += 1
+        label = f"Terminal {self._tab_count}"
+        self._add_tab_btn(label)
+        tab = self._create_terminal()
+        self._switch_tab(len(self._tabs) - 1)
+
+    def _switch_tab(self, idx: int):
+        if idx < 0 or idx >= len(self._tabs):
+            return
+        # Hide current
+        if self._current < len(self._tabs):
+            self._tabs[self._current].hide()
+        if self._current < len(self._tab_buttons):
+            self._tab_buttons[self._current].setStyleSheet(self._tab_btn_style(active=False))
+
+        # Show new
+        self._current = idx
+        self._tabs[idx].show()
+        self._tab_buttons[idx].setStyleSheet(self._tab_btn_style(active=True))
 
     def run_command(self, cmd: str):
-        self._term.run_command(cmd)
+        """Run command in the current tab."""
+        if self._tabs:
+            self._tabs[self._current].run_command(cmd)
 
     @pyqtSlot(str)
     def on_mode_changed(self, mode: str):
-        for t in self._terminals:
-            t.on_mode_changed(mode)
+        for tab in self._tabs:
+            tab.on_mode_changed(mode)
