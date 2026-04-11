@@ -4,6 +4,35 @@
 // shards
 
 > cd source-code
--> cd main && python -m nuitka --standalone --onefile main.py
+-> cd main && python3.13 -m nuitka \
+    --standalone \
+    --onefile \
+    \
+    --enable-plugin=pyqt6 \
+    \
+    --include-package=ui \
+    --include-package=core \
+    --include-data-dir=./ui=ui \
+    --include-data-dir=./core=core \
+    \
+    --python-flag=no_site \
+    --python-flag=no_warnings \
+    \
+    --output-filename=cybersec-mode-main \
+    --output-dir=/tmp/cybersec-build \
+    \
+    --show-progress \
+    --show-memory \
+    --assume-yes-for-downloads \
+    --remove-output \
+    \
+    --lto=yes \
+    --jobs=$(nproc) \
+    \
+    --company-name="HackerOS" \
+    --product-name="Cybersecurity Mode" \
+    --file-version="0.1.0.0" \
+    \
+    main.py
 -> cd backend && cargo build --release
 -> shards build
