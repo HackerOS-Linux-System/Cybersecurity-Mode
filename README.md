@@ -11,22 +11,6 @@ Offensive penetration testing and defensive auditing in one unified interface.
 | Backend | Rust (tokio) | `cybersec-mode-backend` | `/usr/lib/HackerOS/Cybersecurity-Mode/` |
 | CLI | Crystal | `cybersec` | `/usr/bin/` |
 
-## Quick Start
-
-```bash
-# Install
-sudo bash install.sh
-
-# Launch session (from TTY)
-cybersec
-
-# Launch GUI in existing session
-cybersec please
-
-# Help
-cybersec help
-```
-
 ## Modes
 
 - **🔴 Red Mode** — Offensive / Penetration Testing
