@@ -30,4 +30,4 @@ See `docs/documentation.html` for full documentation.
 
 ## License
 
-HackerOS Project
+BSD-3
