@@ -1,1 +1,26 @@
+[package]
+name = "cybersec-mode-backend"
+version = "0.0.1"
+edition = "2021"
+authors = ["HackerOS Team <hackeros068@gmail.com>"]
+description = "Cybersecurity Mode backend — container management, IPC, scanning"
 
+[[bin]]
+name = "cybersec-mode-backend"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+nix = { version = "0.27", features = ["process", "signal"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
