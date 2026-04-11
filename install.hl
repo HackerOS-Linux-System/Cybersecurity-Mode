@@ -6,3 +6,4 @@
 -o /usr/lib/HackerOS/Cybersecurity-Mode/cybersec-mode-main https://github.com/HackerOS-Linux-System/Cybersecurity-Mode/releases/download/v0.1/cybersec-mode-main \
 -o /usr/bin/cybersec https://github.com/HackerOS-Linux-System/Cybersecurity-Mode/releases/download/v0.1/cybersec
 > sudo chmod +x /usr/lib/HackerOS/Cybersecurity-Mode/cybersec-mode-backend /usr/lib/HackerOS/Cybersecurity-Mode/cybersec-mode-main /usr/bin/cybersec
+> sudo apt install -y cage
