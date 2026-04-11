@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Cybersecurity Mode - Main Entry Point
+HackerOS Cybersecurity Suite
+Python 3.13 + PyQt6
+Compiled with Nuitka -> cybersec-mode-main
+"""
+
 import sys
 import os
 import json
@@ -284,8 +293,7 @@ def main():
     app.setOrganizationName(ORG_NAME)
     app.setApplicationVersion(APP_VERSION)
 
-    # High-DPI
-    app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+    # Qt6 handles HiDPI automatically — AA_UseHighDpiPixmaps removed in Qt6
 
     # Mode selection dialog (first run or always_ask)
     always_ask = config.get("always_ask_mode", True)
