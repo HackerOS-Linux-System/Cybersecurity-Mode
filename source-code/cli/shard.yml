@@ -1,1 +1,14 @@
+name: cybersec
+version: 0.1
+description: HackerOS Cybersecurity Mode CLI
 
+authors:
+  - HackerOS Team
+
+targets:
+  cybersec:
+    main: src/main.cr
+
+crystal: ">= 1.10.0"
+
+license: BSD-3
