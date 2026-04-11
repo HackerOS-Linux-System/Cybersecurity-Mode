@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Cybersecurity Mode
+Comment=HackerOS Cybersecurity Mode — Full security workstation session
+Exec=/usr/bin/cybersec
+TryExec=/usr/bin/cybersec
+Type=Application
+DesktopNames=cybersec-mode
+X-GDM-SessionRegistered=true
