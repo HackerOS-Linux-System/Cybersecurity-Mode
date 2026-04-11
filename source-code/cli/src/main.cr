@@ -132,6 +132,8 @@ def cmd_help
   puts "    #{cyan("cybersec container")} CMD    Container: start|stop|rm|logs"
   puts "    #{cyan("cybersec plugin")} CMD       Plugins: list|install|remove|info"
   puts "    #{cyan("cybersec tools")} [CAT]      List security tools"
+  puts "    #{cyan("cybersec back")}             Switch back to Cybersec Mode session (tty3)"
+  puts "    #{cyan("cybersec back kde")}         Switch back to KDE Plasma (tty2)"
   puts ""
   puts bold("  EXAMPLES")
   puts "    #{dim("# Full TTY session (from Ctrl+Alt+F2)")}"
@@ -380,6 +382,105 @@ def cmd_version
   puts "  #{bold(APP_NAME)} #{cyan("v#{VERSION}")} — #{dim("HackerOS")} — #{dim("Shell: #{HSH_BIN}")}"
 end
 
+# ── back mode ─────────────────────────────────────────────────────────────
+#
+# cybersec back         — switch back to Cybersecurity Mode session (tty3)
+# cybersec back kde     — switch back to KDE Plasma session (tty2)
+# cybersec back mode    — switch back to Cybersec Mode OR launch it
+#
+# TTY layout (convention):
+#   tty1  — getty / console
+#   tty2  — KDE Plasma (startplasma-wayland)
+#   tty3  — Cybersecurity Mode (cage cybersec-mode-main)
+#
+# The button "Switch Back" in the GUI status bar triggers:
+#   cybersec back kde
+
+def chvt(n : Int32)
+  Process.run("chvt", [n.to_s], error: Process::Redirect::Close)
+end
+
+def cybersec_session_running? : Bool
+  # Check if cage/cybersec-mode-main is running on any tty
+  out = ""
+  Process.run("bash", ["-c", "loginctl list-sessions --no-legend 2>/dev/null | grep -c cybersec || echo 0"],
+    output: Process::Redirect::Pipe) { |p| out = p.output.gets_to_end.strip }
+  out.to_i? != 0
+rescue
+  false
+end
+
+def plasma_session_running? : Bool
+  out = ""
+  Process.run("bash", ["-c", "loginctl list-sessions --no-legend 2>/dev/null | grep -c plasmashell || echo 0"],
+    output: Process::Redirect::Pipe) { |p| out = p.output.gets_to_end.strip }
+  out.to_i? != 0
+rescue
+  false
+end
+
+def cmd_back(args : Array(String))
+  target = args.first? || "mode"
+
+  case target
+  when "kde", "plasma"
+    banner
+    puts "  #{bold("⇄  Switching to KDE Plasma")}  #{dim("(tty2)")}"
+    puts ""
+    if plasma_session_running?
+      puts "  " + cyan("▶") + "  Plasma running — switching to tty2…"
+      chvt(2)
+    else
+      puts "  " + yellow("⚠") + "  KDE Plasma not running — starting startplasma-wayland on tty2…"
+      # Start plasma in background then switch tty
+      Process.run("bash", ["-c",
+        "nohup startplasma-wayland > /tmp/plasma-start.log 2>&1 &"
+      ])
+      sleep(2)
+      chvt(2)
+      puts "  " + green("✓") + "  Switched to tty2."
+    end
+
+  when "mode", "cybersec"
+    banner
+    puts "  #{bold("⇄  Switching to Cybersecurity Mode")}  #{dim("(tty3)")}"
+    puts ""
+    if cybersec_session_running?
+      puts "  " + cyan("▶") + "  Session found — switching to tty3…"
+      chvt(3)
+    else
+      puts "  " + yellow("⚠") + "  No Cybersecurity Mode session found — launching…"
+      unless executable?(GUI_BIN)
+        puts "  " + red("✗") + "  GUI binary not found: #{GUI_BIN}"
+        exit 1
+      end
+      shell = executable?(HSH_BIN) ? HSH_BIN : "/bin/bash"
+      env = {
+        "XDG_SESSION_TYPE" => "wayland",
+        "CYBERSEC_SESSION" => "1",
+        "CYBERSEC_SHELL"   => shell,
+      }
+      if executable?(CAGE_BIN)
+        Process.run("bash", ["-c",
+          "nohup #{CAGE_BIN} #{GUI_BIN} > /tmp/cybersec-session.log 2>&1 &"
+        ])
+      else
+        Process.run("bash", ["-c",
+          "nohup #{GUI_BIN} > /tmp/cybersec-session.log 2>&1 &"
+        ])
+      end
+      sleep(1)
+      chvt(3)
+      puts "  " + green("✓") + "  Session launched on tty3."
+    end
+
+  else
+    puts red("  ✗  Unknown back target: #{target}")
+    puts dim("     Use: cybersec back [kde|mode]")
+    exit 1
+  end
+end
+
 # ── Main ───────────────────────────────────────────────────────────────────
 
 args = ARGV.to_a
@@ -393,17 +494,18 @@ subcommand = args[0]
 rest       = args[1..]
 
 case subcommand
-when "please"          then cmd_launch_in_session
-when "help","--help","-h" then cmd_help
-when "update"          then cmd_update
-when "plugin"          then cmd_plugin(rest)
-when "status"          then cmd_status
-when "set-mode"        then cmd_set_mode(rest)
-when "exec"            then cmd_exec(rest)
-when "shell"           then cmd_shell
-when "container"       then cmd_container(rest)
-when "tools"           then cmd_tools(rest)
-when "version","--version","-v" then cmd_version
+when "please"                    then cmd_launch_in_session
+when "help", "--help", "-h"      then cmd_help
+when "update"                    then cmd_update
+when "plugin"                    then cmd_plugin(rest)
+when "status"                    then cmd_status
+when "set-mode"                  then cmd_set_mode(rest)
+when "exec"                      then cmd_exec(rest)
+when "shell"                     then cmd_shell
+when "container"                 then cmd_container(rest)
+when "tools"                     then cmd_tools(rest)
+when "back"                      then cmd_back(rest)
+when "version", "--version", "-v" then cmd_version
 else
   puts red("  ✗  Unknown command: #{subcommand}")
   puts dim("     Run 'cybersec help' for usage.")
