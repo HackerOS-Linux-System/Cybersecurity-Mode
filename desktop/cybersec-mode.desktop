@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Cybersecurity Mode
+GenericName=Security Workstation
+Comment=HackerOS Cybersecurity Mode — Offensive & Defensive Security Suite
+Exec=/usr/bin/cybersec please
+Icon=/usr/share/HackerOS/ICONS/HackerOS.png
+Terminal=false
+Type=Application
+Categories=System;Security;Network;
+Keywords=cybersec;pentest;hacking;security;nmap;metasploit;hackeros;
+StartupNotify=true
+StartupWMClass=cybersec-mode-main
+MimeType=
+X-KDE-RunOnDiscreteGpu=false
