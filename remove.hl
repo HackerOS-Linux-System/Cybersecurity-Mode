@@ -1,2 +1,2 @@
-> sudo rm -rf /usr/lib/HackerOS/Cybersecurity-Mode/
-> sudo rm -rf /usr/bin/cybersec
+^> rm -rf /usr/bin/cybersec
+^> rm -rf /ust/share/wayland-sessions/Cybersecurity-Mode.desktop
