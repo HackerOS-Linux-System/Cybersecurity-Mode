@@ -1,0 +1,11 @@
+*.desktop linguist-detectable=true
+*.desktop linguist-documentation=false
+*.desktop linguist-language=INI
+
+*.slint linguist-detectable=true
+*.slint linguist-documentation=false
+*.slint linguist-language=SLINT
+
+*.toml linguist-detectable=true
+*.toml linguist-documentation=false
+*.toml linguist-language=TOML
