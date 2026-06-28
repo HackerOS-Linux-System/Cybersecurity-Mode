@@ -2,3 +2,9 @@
 // rustc
 
 > cargo build --release
+
+;; > sudo apt install -y pkg-config libfontconfig1-dev
+;; > sudo apt install -y libssl-dev
+;; > sudo apt install -y libudev-dev
+;; > sudo apt install -y libseat-dev
+;; install dependences ^^^^
