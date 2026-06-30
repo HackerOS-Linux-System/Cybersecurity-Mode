@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Cybersecurity Mode
+GenericName=Security Workstation
+Comment=HackerOS Cybersecurity Mode — launch as app in current session
+Exec=/usr/bin/cm please
+Icon=/usr/share/HackerOS/ICONS/HackerOS-Cybersecurity.png
+Terminal=false
+Type=Application
+Categories=System;Security;Network;
+Keywords=cybersec;pentest;hacking;security;hackeros;
+StartupNotify=true
+StartupWMClass=cm-please
+MimeType=
+X-KDE-RunOnDiscreteGpu=false
