@@ -1,1 +1,101 @@
+[workspace]
+members = [
+    ".",
+    "compositor",
+    "cm-bg",
+]
+resolver = "2"
 
+[package]
+name = "cm"
+version = "0.2.0"
+edition = "2021"
+authors = ["HackerOS Team"]
+description = "Cybersecurity Mode — HackerOS unified security workstation"
+license = "BSD-3-Clause"
+default-run = "cm"
+
+[[bin]]
+name = "cm"
+path = "source-code/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# CLI
+clap    = { version = "4", features = ["derive", "color"] }
+colored = "2"
+
+# Slint UI
+slint = { version = "1.5", features = ["compat-1-2"] }
+
+# IPC / serialization
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+
+# Smithay compositor (0.7 — has all features including "desktop")
+smithay = { version = "0.7", features = [
+    "wayland_frontend",
+    "xwayland",
+    "renderer_gl",
+    "backend_libinput",
+    "backend_udev",
+    "backend_drm",
+    "backend_egl",
+    "backend_winit",
+    "backend_session_libseat",
+    "desktop",
+] }
+wayland-server        = "0.31"
+wayland-protocols     = { version = "0.32", features = ["server", "staging", "unstable"] }
+wayland-protocols-wlr = { version = "0.3", features = ["server"] }
+
+# Desktop entry parsing
+freedesktop_entry_parser = "2"
+
+# System
+libc = "0.2"
+nix  = { version = "0.27", features = ["process", "signal", "user", "fs"] }
+
+# Logging
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow    = "1"
+thiserror = "2"
+
+# System info
+sysinfo = "0.30"
+
+# Time
+chrono = { version = "0.4", features = ["clock"] }
+
+# Directories / FS
+dirs      = "5"
+walkdir   = "2"
+mime_guess = "2"
+
+# Calculator backend
+evalexpr = "11"
+
+# DBus (notification daemon)
+zbus     = { version = "4", features = ["tokio"] }
+zvariant = "4"
+
+# HTTP (store / package info)
+reqwest = { version = "0.12", features = ["json", "stream"] }
+url     = "2"
+
+# Helpers
+which    = "6"
+indexmap = "2"
+
+[build-dependencies]
+slint-build = "1.5"
+
+[profile.release]
+opt-level     = 3
+lto           = true
+codegen-units = 1
+strip         = true
