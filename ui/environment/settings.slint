@@ -1,0 +1,364 @@
+import { Button, LineEdit, ScrollView, ComboBox, CheckBox, Slider } from "std-widgets.slint";
+
+global ST {
+    out property <color> bg:      #0d0e12;
+    out property <color> bg2:     #13141a;
+    out property <color> bg3:     #0a0b0f;
+    out property <color> surface: #161720;
+    out property <color> border:  #1e2030;
+    out property <color> text:    #e8e9f0;
+    out property <color> text2:   #9098b0;
+    out property <color> text3:   #505870;
+    out property <color> accent:  #ef4444;
+    out property <color> green:   #22c55e;
+    out property <length> r:      8px;
+    out property <length> rsm:    5px;
+}
+
+component SettingsSection inherits VerticalLayout {
+    in property <string> title;
+    spacing: 8px;
+    padding-top: 16px;
+
+    Text {
+        text: title;
+        color: ST.text3; font-size: 9px; font-weight: 700; letter-spacing: 2px;
+        padding-bottom: 4px;
+    }
+    Rectangle { height: 1px; background: ST.border; }
+}
+
+component SettingsRow inherits Rectangle {
+    in property <string> label;
+    in property <string> hint: "";
+
+    height: hint == "" ? 46px : 58px;
+    border-radius: ST.rsm;
+    background: ST.surface;
+    border-width: 1px; border-color: ST.border;
+
+    HorizontalLayout {
+        padding-left: 14px; padding-right: 14px; spacing: 10px;
+
+        VerticalLayout {
+            spacing: 2px; horizontal-stretch: 1; alignment: center;
+            Text { text: label; color: ST.text; font-size: 12px; }
+            if hint != "" : Text { text: hint; color: ST.text3; font-size: 10px; }
+        }
+        @children
+    }
+}
+
+component SidebarItem inherits Rectangle {
+    in property <string> label;
+    in property <string> icon;
+    in property <bool> active;
+    callback clicked();
+
+    height: 40px; border-radius: ST.rsm;
+    background: active ? ST.accent.with-alpha(0.14) : (ta.has-hover ? ST.surface : transparent);
+    border-width: active ? 1px : 0px;
+    border-color: ST.accent.with-alpha(0.3);
+    animate background { duration: 80ms; }
+
+    ta := TouchArea { clicked => { root.clicked(); } }
+
+    HorizontalLayout {
+        padding-left: 12px; spacing: 10px;
+        Text { text: icon; font-size: 14px; vertical-alignment: center; }
+        Text { text: label;
+            color: active ? ST.accent : ST.text2;
+            font-size: 12px; font-weight: active ? 700 : 400;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component SettingsApp inherits Window {
+    in property <image> launcher-icon-img;
+    title: "CM Environment — Settings";
+    background: ST.bg;
+    min-width: 900px; min-height: 620px;
+
+    // State
+    in-out property <int> active-section: 0;
+
+    // Appearance
+    in-out property <string> theme-name: "cybersec-dark";
+    in-out property <string> icon-theme: "BeautyLine";
+    in-out property <string> wallpaper: "/usr/share/wallpapers/HackerOS-Wallpapers/Wallpaper23.png";
+    in-out property <string> launcher-icon: "/usr/share/HackerOS/ICONS/HackerOS-Cybersecurity.png";
+    in-out property <float> scale-factor: 1.0;
+    in-out property <bool> animations-enabled: true;
+    in-out property <bool> blur-enabled: true;
+
+    // Default apps
+    in-out property <string> default-terminal: "/usr/share/HackerOS/Scripts/HackerOS-Apps/Hacker-Term";
+    in-out property <string> default-browser: "mullvad-browser";
+    in-out property <string> default-file-manager: "nemo";
+    in-out property <string> default-text-editor: "kate";
+
+    // Workspaces
+    in-out property <int> workspace-count: 4;
+
+    // Available themes/icons
+    in property <[string]> available-themes: ["cybersec-dark", "cybersec-light", "dracula", "nord"];
+    in property <[string]> available-icon-themes: ["BeautyLine", "breeze", "Adwaita", "hicolor"];
+    in property <[string]> available-wallpapers: [];
+
+    callback save();
+    callback reset-defaults();
+    callback wallpaper-browse();
+    callback launcher-icon-browse();
+
+    HorizontalLayout {
+        spacing: 0px;
+
+        // Sidebar
+        Rectangle {
+            width: 200px;
+            background: ST.bg3;
+            border-width: 1px; border-color: ST.border;
+
+            VerticalLayout {
+                padding: 12px; spacing: 2px;
+
+                // Header
+                HorizontalLayout {
+                    spacing: 10px; padding-bottom: 12px;
+                    Image {
+                        source: @image-url("/usr/share/HackerOS/ICONS/HackerOS-Cybersecurity.png");
+                        width: 24px; height: 24px; image-fit: contain;
+                    }
+                    Text { text: "Settings"; color: ST.text; font-size: 14px; font-weight: 800; vertical-alignment: center; }
+                }
+
+                Rectangle { height: 1px; background: ST.border; margin-bottom: 8px; }
+
+                SidebarItem { label: "Appearance"; icon: "🎨"; active: active-section == 0; clicked => { root.active-section = 0; } }
+                SidebarItem { label: "Display"; icon: "🖥"; active: active-section == 1; clicked => { root.active-section = 1; } }
+                SidebarItem { label: "Default Apps"; icon: "📦"; active: active-section == 2; clicked => { root.active-section = 2; } }
+                SidebarItem { label: "Workspaces"; icon: "⬛"; active: active-section == 3; clicked => { root.active-section = 3; } }
+                SidebarItem { label: "Keybindings"; icon: "⌨"; active: active-section == 4; clicked => { root.active-section = 4; } }
+                SidebarItem { label: "Power"; icon: "⏻"; active: active-section == 5; clicked => { root.active-section = 5; } }
+                SidebarItem { label: "About"; icon: "ℹ"; active: active-section == 6; clicked => { root.active-section = 6; } }
+
+                Rectangle { vertical-stretch: 1; }
+
+                // Save button
+                Rectangle {
+                    height: 38px; border-radius: ST.rsm;
+                    background: ST.green.with-alpha(0.12);
+                    border-width: 1px; border-color: ST.green.with-alpha(0.35);
+                    save-ta := TouchArea { clicked => { root.save(); } }
+                    Text { text: "💾  Save"; color: ST.green; font-size: 12px; font-weight: 700;
+                        horizontal-alignment: center; vertical-alignment: center; }
+                }
+            }
+        }
+
+        // Main content
+        ScrollView {
+            horizontal-stretch: 1;
+
+            VerticalLayout {
+                padding: 24px; spacing: 8px;
+
+                // ── Appearance ────────────────────────────────────────
+                if active-section == 0 : VerticalLayout {
+                    spacing: 8px;
+
+                    Text { text: "Appearance"; color: ST.text; font-size: 18px; font-weight: 800; padding-bottom: 4px; }
+
+                    SettingsSection { title: "THEME"; }
+
+                    SettingsRow { label: "Color Theme"; hint: "Choose the visual style of CM Environment";
+                        ComboBox { model: root.available-themes; current-value: root.theme-name;
+                            width: 200px;
+                            selected(t) => { root.theme-name = t; } }
+                    }
+
+                    SettingsRow { label: "Icon Theme"; hint: "BeautyLine (KDE) or Adwaita (GNOME) recommended";
+                        ComboBox { model: root.available-icon-themes; current-value: root.icon-theme;
+                            width: 200px;
+                            selected(t) => { root.icon-theme = t; } }
+                    }
+
+                    SettingsSection { title: "WALLPAPER"; }
+
+                    SettingsRow { label: "Wallpaper Path"; hint: "Full path to wallpaper image (.png .jpg .webp)";
+                        HorizontalLayout { spacing: 8px;
+                            LineEdit { text: root.wallpaper; width: 320px;
+                                edited(t) => { root.wallpaper = t; } }
+                            Rectangle { width: 80px; height: 32px; border-radius: ST.rsm;
+                                background: ST.surface; border-width: 1px; border-color: ST.border;
+                                browse-ta := TouchArea { clicked => { root.wallpaper-browse(); } }
+                                Text { text: "Browse…"; color: ST.text2; font-size: 11px;
+                                    horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                        }
+                    }
+
+                    SettingsSection { title: "LAUNCHER ICON"; }
+
+                    SettingsRow { label: "Launcher Button Icon"; hint: "Icon shown in taskbar launcher button (default: HackerOS-Cybersecurity.png)";
+                        HorizontalLayout { spacing: 8px;
+                            LineEdit { text: root.launcher-icon; width: 320px;
+                                edited(t) => { root.launcher-icon = t; } }
+                            Image {
+                                source: root.launcher-icon-img;
+                                width: 32px; height: 32px; image-fit: contain;
+                            }
+                            Rectangle { width: 80px; height: 32px; border-radius: ST.rsm;
+                                background: ST.surface; border-width: 1px; border-color: ST.border;
+                                li-ta := TouchArea { clicked => { root.launcher-icon-browse(); } }
+                                Text { text: "Browse…"; color: ST.text2; font-size: 11px;
+                                    horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                        }
+                    }
+
+                    SettingsSection { title: "EFFECTS"; }
+
+                    SettingsRow { label: "Enable Animations"; hint: "Window open/close/minimize animations";
+                        CheckBox { checked: root.animations-enabled;
+                            toggled => { root.animations-enabled = self.checked; } }
+                    }
+                    SettingsRow { label: "Enable Blur"; hint: "Frosted glass effect on panels (requires compositor support)";
+                        CheckBox { checked: root.blur-enabled;
+                            toggled => { root.blur-enabled = self.checked; } }
+                    }
+                }
+
+                // ── Display ───────────────────────────────────────────
+                if active-section == 1 : VerticalLayout {
+                    spacing: 8px;
+                    Text { text: "Display"; color: ST.text; font-size: 18px; font-weight: 800; padding-bottom: 4px; }
+
+                    SettingsSection { title: "SCALING"; }
+
+                    SettingsRow { label: "Scale Factor"; hint: "UI scaling (1.0 = 100%, 2.0 = 200% for HiDPI)";
+                        HorizontalLayout { spacing: 12px;
+                            Slider { value: root.scale-factor; minimum: 0.5; maximum: 3.0;
+                                width: 200px;
+                                changed(v) => { root.scale-factor = v; } }
+                            Text { text: Math.round(root.scale-factor * 100) + "%";
+                                color: ST.accent; font-size: 12px; font-weight: 700;
+                                vertical-alignment: center; width: 50px; }
+                        }
+                    }
+                }
+
+                // ── Default Apps ──────────────────────────────────────
+                if active-section == 2 : VerticalLayout {
+                    spacing: 8px;
+                    Text { text: "Default Applications"; color: ST.text; font-size: 18px; font-weight: 800; padding-bottom: 4px; }
+
+                    Text { text: "Change which app opens by default for each type. Enter the executable name or full path.";
+                        color: ST.text2; font-size: 11px; padding-bottom: 8px; }
+
+                    SettingsSection { title: "SYSTEM APPS"; }
+
+                    SettingsRow { label: "Terminal"; hint: "Hacker Term (custom) or any terminal emulator";
+                        LineEdit { text: root.default-terminal; width: 380px;
+                            edited(t) => { root.default-terminal = t; } }
+                    }
+                    SettingsRow { label: "Web Browser"; hint: "mullvad-browser (default), firefox, chromium";
+                        LineEdit { text: root.default-browser; width: 380px;
+                            edited(t) => { root.default-browser = t; } }
+                    }
+                    SettingsRow { label: "File Manager"; hint: "nemo (default), nautilus, thunar";
+                        LineEdit { text: root.default-file-manager; width: 380px;
+                            edited(t) => { root.default-file-manager = t; } }
+                    }
+                    SettingsRow { label: "Text Editor"; hint: "kate (default), gedit, mousepad";
+                        LineEdit { text: root.default-text-editor; width: 380px;
+                            edited(t) => { root.default-text-editor = t; } }
+                    }
+                }
+
+                // ── Workspaces ────────────────────────────────────────
+                if active-section == 3 : VerticalLayout {
+                    spacing: 8px;
+                    Text { text: "Workspaces"; color: ST.text; font-size: 18px; font-weight: 800; padding-bottom: 4px; }
+
+                    SettingsSection { title: "VIRTUAL DESKTOPS"; }
+
+                    SettingsRow { label: "Number of Workspaces"; hint: "1–8 virtual desktops";
+                        HorizontalLayout { spacing: 12px;
+                            Slider { value: root.workspace-count; minimum: 1; maximum: 8;
+                                width: 180px;
+                                changed(v) => { root.workspace-count = Math.round(v); } }
+                            Text { text: root.workspace-count;
+                                color: ST.accent; font-size: 14px; font-weight: 700;
+                                vertical-alignment: center; width: 30px; }
+                        }
+                    }
+                }
+
+                // ── Keybindings ───────────────────────────────────────
+                if active-section == 4 : VerticalLayout {
+                    spacing: 8px;
+                    Text { text: "Keybindings"; color: ST.text; font-size: 18px; font-weight: 800; padding-bottom: 4px; }
+
+                    Text { text: "Edit ~/.config/hackeros/Cybersecurity-Mode/environment.hk [keybindings] section directly for full control.";
+                        color: ST.text2; font-size: 11px; padding-bottom: 8px; }
+
+                    SettingsSection { title: "WINDOW MANAGEMENT"; }
+
+                    for binding in ["Super → Launcher", "Super+Return → Terminal", "Alt+F4 → Close Window",
+                                    "Super+Up → Maximize", "Super+Left → Tile Left", "Super+Right → Tile Right",
+                                    "Super+D → Show Desktop", "Print → Screenshot", "Super+L → Lock Screen"] :
+                    Rectangle {
+                        height: 36px; border-radius: ST.rsm;
+                        background: ST.surface; border-width: 1px; border-color: ST.border;
+                        HorizontalLayout {
+                            padding-left: 14px; padding-right: 14px;
+                            Text { text: binding; color: ST.text2; font-size: 11px; vertical-alignment: center; }
+                        }
+                    }
+                }
+
+                // ── Power ─────────────────────────────────────────────
+                if active-section == 5 : VerticalLayout {
+                    spacing: 8px;
+                    Text { text: "Power"; color: ST.text; font-size: 18px; font-weight: 800; padding-bottom: 4px; }
+                    SettingsSection { title: "POWER ACTIONS"; }
+                    for action in ["Shutdown", "Reboot", "Suspend", "Lock Screen", "Log Out"] :
+                    Rectangle {
+                        height: 44px; border-radius: ST.rsm;
+                        background: ST.surface; border-width: 1px; border-color: ST.border;
+                        ta := TouchArea {}
+                        HorizontalLayout {
+                            padding-left: 14px; padding-right: 14px;
+                            Text { text: action; color: ST.text; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
+                            Text { text: "›"; color: ST.text3; font-size: 16px; vertical-alignment: center; }
+                        }
+                    }
+                }
+
+                // ── About ─────────────────────────────────────────────
+                if active-section == 6 : VerticalLayout {
+                    spacing: 16px;
+                    Text { text: "About"; color: ST.text; font-size: 18px; font-weight: 800; padding-bottom: 4px; }
+
+                    HorizontalLayout {
+                        spacing: 20px; alignment: start;
+                        Image {
+                            source: @image-url("/usr/share/HackerOS/ICONS/HackerOS-Cybersecurity.png");
+                            width: 80px; height: 80px; image-fit: contain;
+                        }
+                        VerticalLayout {
+                            spacing: 6px;
+                            Text { text: "CM Environment"; color: ST.text; font-size: 20px; font-weight: 800; }
+                            Text { text: "Version 0.2.0"; color: ST.text2; font-size: 13px; }
+                            Text { text: "HackerOS — Red Team Edition"; color: ST.accent; font-size: 12px; font-weight: 700; }
+                            Text { text: "Built with Rust + Slint + Smithay"; color: ST.text3; font-size: 11px; }
+                            Text { text: "License: BSD-3-Clause"; color: ST.text3; font-size: 11px; }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
