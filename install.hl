@@ -1,5 +1,47 @@
-// curl
+#!/usr/bin/hl
+# CM v0.2 install script — HackerOS
+set -e
 
-> sudo curl
-> sudo chmod +x /usr/bin/cybersec
-> sudo apt install -y cage
+BINARY="target/release/cm"
+PREFIX="${PREFIX:-/usr}"
+
+if [ ! -f "$BINARY" ]; then
+    echo "Run 'cargo build --release' first"
+    exit 1
+fi
+
+echo "Installing CM v0.2..."
+
+# Binaries
+install -Dm755 "$BINARY" "$PREFIX/bin/cm"
+install -Dm755 "target/release/cm-compositor" "$PREFIX/bin/cm-compositor" 2>/dev/null || true
+install -Dm755 "target/release/cm-bg" "$PREFIX/bin/cm-bg"
+
+# Desktop files
+install -Dm644 desktop/cm-mode.desktop \
+    "$PREFIX/share/applications/cm-mode.desktop"
+install -Dm644 desktop/cm-please.desktop \
+    "$PREFIX/share/applications/cm-please.desktop"
+install -Dm644 desktop/cm-environment-session.desktop \
+    "$PREFIX/share/wayland-sessions/cm-environment.desktop"
+install -Dm644 desktop/Hacker-Term.desktop \
+    "$PREFIX/share/applications/Hacker-Term.desktop"
+install -Dm644 desktop/HackerOS-Welcome.desktop \
+    "$PREFIX/share/applications/HackerOS-Welcome.desktop"
+install -Dm644 desktop/HackerOS-Store.desktop \
+    "$PREFIX/share/applications/HackerOS-Store.desktop"
+
+# Default theme
+install -Dm644 docs/theme-cybersec-dark.hk \
+    "$PREFIX/share/themes/cybersec-dark/config.hk"
+
+# Update desktop database
+update-desktop-database "$PREFIX/share/applications" 2>/dev/null || true
+
+echo "CM v0.2 installed to $PREFIX/bin/cm"
+echo ""
+echo "Usage:"
+echo "  cm please           — launch as app"
+echo "  cm environment      — full desktop"
+echo "  cm mode             — Red Team mode"
+echo "  cm app <name>       — launch CM app"
