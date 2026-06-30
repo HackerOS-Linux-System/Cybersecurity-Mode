@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=CM Mode
+Comment=HackerOS Cybersecurity Mode — Red Team Security Suite
+Exec=/usr/bin/cm mode
+Icon=/usr/share/HackerOS/ICONS/HackerOS-Cybersecurity.png
+Terminal=false
+Type=Application
+Categories=System;Security;Network;
+Keywords=cybersec;pentest;hacking;security;nmap;metasploit;hackeros;redteam;
+StartupNotify=true
+StartupWMClass=cm-mode
+X-KDE-RunOnDiscreteGpu=false
