@@ -1,1 +1,439 @@
+import { Button, VerticalBox, HorizontalBox, LineEdit, ScrollView, TextEdit } from "std-widgets.slint";
 
+global PleaseTheme {
+    out property <color> bg:        #0d0e12;
+    out property <color> bg2:       #13141a;
+    out property <color> bg3:       #0a0b0f;
+    out property <color> surface:   #161720;
+    out property <color> border:    #1e2030;
+    out property <color> text:      #e8e9f0;
+    out property <color> text2:     #9098b0;
+    out property <color> text3:     #505870;
+    out property <color> accent:    #ef4444;
+    out property <color> green:     #22c55e;
+    out property <color> blue:      #3b82f6;
+    out property <length> radius:   8px;
+    out property <length> rsm:      5px;
+}
+
+export struct PleaseToolData {
+    name: string,
+    display-name: string,
+    description: string,
+    icon: string,
+    category: string,
+    color: color,
+    difficulty: string,
+    installed: bool,
+    command: string,
+}
+
+component NavButton inherits Rectangle {
+    in property <string> label;
+    in property <string> icon;
+    in property <bool> active;
+    callback clicked();
+
+    height: 44px;
+    border-radius: PleaseTheme.rsm;
+    background: active
+        ? PleaseTheme.accent.with-alpha(0.15)
+        : (ta.has-hover ? PleaseTheme.surface : transparent);
+    border-width: active ? 1px : 0px;
+    border-color: PleaseTheme.accent.with-alpha(0.35);
+    animate background { duration: 100ms; }
+
+    ta := TouchArea { clicked => { root.clicked(); } }
+
+    HorizontalLayout {
+        padding-left: 14px; spacing: 10px;
+        Text {
+            text: icon; font-size: 15px;
+            vertical-alignment: center;
+        }
+        Text {
+            text: label;
+            color: active ? PleaseTheme.accent : PleaseTheme.text2;
+            font-size: 12px; font-weight: active ? 700 : 400;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component SmallToolCard inherits Rectangle {
+    in property <PleaseToolData> tool;
+    in property <bool> selected;
+    callback clicked();
+    callback run();
+
+    height: 70px;
+    border-radius: PleaseTheme.rsm;
+    background: selected
+        ? tool.color.with-alpha(0.12)
+        : (ta.has-hover ? PleaseTheme.surface : PleaseTheme.bg2);
+    border-width: 1px;
+    border-color: selected ? tool.color.with-alpha(0.5) : PleaseTheme.border;
+    animate background { duration: 100ms; }
+
+    ta := TouchArea { clicked => { root.clicked(); } }
+
+    HorizontalLayout {
+        padding: 10px; spacing: 10px;
+
+        Rectangle {
+            width: 36px; height: 36px; border-radius: 8px;
+            background: tool.color.with-alpha(0.15);
+            border-width: 1px; border-color: tool.color.with-alpha(0.3);
+            Text { text: tool.icon; font-size: 17px;
+                horizontal-alignment: center; vertical-alignment: center; }
+        }
+
+        VerticalLayout {
+            spacing: 3px; vertical-stretch: 1;
+            Text {
+                text: tool.display-name;
+                color: tool.color; font-size: 12px; font-weight: 700;
+                overflow: elide;
+            }
+            Text {
+                text: tool.description;
+                color: PleaseTheme.text3; font-size: 10px;
+                overflow: elide;
+            }
+            Text {
+                text: tool.category + " · " + tool.difficulty;
+                color: PleaseTheme.text3; font-size: 9px;
+            }
+        }
+
+        // Run button
+        if tool.installed : Rectangle {
+            width: 30px; height: 30px; border-radius: 4px;
+            background: tool.color.with-alpha(0.15);
+            border-width: 1px; border-color: tool.color.with-alpha(0.4);
+            run-ta := TouchArea { clicked => { root.run(); } }
+            Text { text: "▶"; color: tool.color; font-size: 11px;
+                horizontal-alignment: center; vertical-alignment: center; }
+            y: (parent.height - 30px) / 2;
+        }
+    }
+}
+
+export component PleaseMainWindow inherits Window {
+    title: "CM — Cybersecurity Mode";
+    background: PleaseTheme.bg;
+    min-width: 1100px;
+    min-height: 720px;
+
+    in property <[PleaseToolData]> tools: [];
+    in property <[string]> categories: ["All", "Recon", "Web", "Exploit", "Passwords", "Network", "Wireless", "Forensics"];
+    in property <bool> container-running: false;
+    in property <string> terminal-output: "";
+    in property <int> selected-tab: 0;    // 0=Tools 1=Terminal 2=Docs
+    in property <int> selected-tool: -1;
+
+    out property <string> active-category: "All";
+    out property <string> terminal-input-text: "";
+
+    callback tool-run(string);
+    callback tool-install(string);
+    callback tool-clicked(int);
+    callback tool-launch(string);  // launch tool by name in terminal
+    callback terminal-submit(string);
+    callback container-toggle();
+    callback tab-changed(int);
+    callback search-changed(string);
+    callback category-changed(string);
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // Titlebar
+        Rectangle {
+            height: 40px;
+            background: PleaseTheme.bg3;
+            border-width: 1px;
+            border-color: PleaseTheme.border;
+
+            HorizontalLayout {
+                padding-left: 14px; padding-right: 14px; spacing: 10px;
+
+                Image {
+                    source: @image-url("/usr/share/HackerOS/ICONS/HackerOS-Cybersecurity.png");
+                    width: 22px; height: 22px; image-fit: contain;
+                    y: (parent.height - 22px) / 2;
+                }
+                Text {
+                    text: "CYBERSECURITY MODE";
+                    color: PleaseTheme.text; font-size: 12px; font-weight: 800;
+                    letter-spacing: 2px; vertical-alignment: center;
+                }
+                Rectangle {
+                    width: 8px; height: 8px; border-radius: 4px;
+                    background: PleaseTheme.accent;
+                    y: (parent.height - 8px) / 2;
+                }
+                Text {
+                    text: "RED TEAM";
+                    color: PleaseTheme.accent; font-size: 10px; font-weight: 700;
+                    letter-spacing: 1.5px; vertical-alignment: center;
+                    background: PleaseTheme.accent.with-alpha(0.1);
+                    padding-left: 8px; padding-right: 8px;
+                    border-radius: 4px;
+                }
+                Rectangle { horizontal-stretch: 1; }
+
+                // Container status badge
+                Rectangle {
+                    height: 24px; width: 110px; border-radius: 4px;
+                    background: container-running
+                        ? PleaseTheme.green.with-alpha(0.1)
+                        : PleaseTheme.surface;
+                    border-width: 1px;
+                    border-color: container-running
+                        ? PleaseTheme.green.with-alpha(0.35)
+                        : PleaseTheme.border;
+                    ct := TouchArea { clicked => { root.container-toggle(); } }
+                    HorizontalLayout {
+                        padding-left: 8px; spacing: 6px;
+                        Rectangle {
+                            width: 6px; height: 6px; border-radius: 3px;
+                            background: container-running ? PleaseTheme.green : PleaseTheme.text3;
+                            y: (parent.height - 6px) / 2;
+                        }
+                        Text {
+                            text: container-running ? "Container ●" : "Container ○";
+                            color: container-running ? PleaseTheme.green : PleaseTheme.text3;
+                            font-size: 10px; font-weight: 700; vertical-alignment: center;
+                        }
+                    }
+                }
+
+                Text {
+                    text: "v0.2";
+                    color: PleaseTheme.text3; font-size: 10px; vertical-alignment: center;
+                }
+            }
+        }
+
+        // Body
+        HorizontalLayout {
+            spacing: 0px;
+
+            // Sidebar
+            Rectangle {
+                width: 180px;
+                background: PleaseTheme.bg3;
+                border-width: 1px;
+                border-color: PleaseTheme.border;
+
+                VerticalLayout {
+                    padding: 10px; spacing: 2px;
+
+                    Text {
+                        text: "NAVIGATION";
+                        color: PleaseTheme.text3; font-size: 9px;
+                        font-weight: 700; letter-spacing: 2px;
+                        padding-bottom: 8px;
+                    }
+
+                    NavButton { label: "Tools"; icon: "⚔"; active: selected-tab == 0; clicked => { root.tab-changed(0); } }
+                    NavButton { label: "Terminal"; icon: "⬛"; active: selected-tab == 1; clicked => { root.tab-changed(1); } }
+                    NavButton { label: "Docs"; icon: "📖"; active: selected-tab == 2; clicked => { root.tab-changed(2); } }
+                    NavButton { label: "Settings"; icon: "⚙"; active: selected-tab == 3; clicked => { root.tab-changed(3); } }
+
+                    Rectangle { height: 1px; background: PleaseTheme.border; margin-top: 8px; margin-bottom: 8px; }
+
+                    Text {
+                        text: "CATEGORIES";
+                        color: PleaseTheme.text3; font-size: 9px;
+                        font-weight: 700; letter-spacing: 2px; padding-bottom: 6px;
+                    }
+
+                    for cat in categories : Rectangle {
+                        height: 30px; border-radius: PleaseTheme.rsm;
+                        background: cat == root.active-category
+                            ? PleaseTheme.accent.with-alpha(0.12)
+                            : (cat-ta.has-hover ? PleaseTheme.surface : transparent);
+                        border-width: cat == root.active-category ? 1px : 0px;
+                        border-color: PleaseTheme.accent.with-alpha(0.3);
+                        animate background { duration: 80ms; }
+
+                        cat-ta := TouchArea { clicked => {
+                            root.active-category = cat;
+                            root.category-changed(cat);
+                        }}
+                        Text {
+                            text: cat;
+                            color: cat == root.active-category ? PleaseTheme.accent : PleaseTheme.text3;
+                            font-size: 11px; vertical-alignment: center;
+                            padding-left: 12px;
+                            font-weight: cat == root.active-category ? 700 : 400;
+                        }
+                    }
+
+                    Rectangle { vertical-stretch: 1; }
+
+                    // Mode badge
+                    Rectangle {
+                        height: 28px; border-radius: 4px;
+                        background: PleaseTheme.accent.with-alpha(0.08);
+                        border-width: 1px; border-color: PleaseTheme.accent.with-alpha(0.2);
+                        Text {
+                            text: "● RED MODE";
+                            color: PleaseTheme.accent; font-size: 10px; font-weight: 700;
+                            letter-spacing: 1.5px; horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // Main panel
+            VerticalLayout {
+                horizontal-stretch: 1;
+
+                // Tab: Tools
+                if selected-tab == 0 : VerticalLayout {
+                    vertical-stretch: 1;
+
+                    // Search
+                    Rectangle {
+                        height: 50px;
+                        background: PleaseTheme.bg2;
+                        border-width: 1px;
+                        border-color: PleaseTheme.border;
+
+                        HorizontalLayout {
+                            padding-top: 8px; padding-bottom: 8px; padding-left: 16px; padding-right: 16px; spacing: 10px;
+                            Rectangle {
+                                horizontal-stretch: 1; max-width: 360px;
+                                border-radius: PleaseTheme.rsm;
+                                background: PleaseTheme.surface;
+                                border-width: 1px; border-color: PleaseTheme.border;
+                                HorizontalLayout {
+                                    padding-left: 10px; spacing: 8px;
+                                    Text { text: "🔍"; font-size: 12px; color: PleaseTheme.text3; vertical-alignment: center; }
+                                    LineEdit { placeholder-text: "Search tools…"; horizontal-stretch: 1;
+                                        edited(t) => { root.search-changed(t); } }
+                                }
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                            Text {
+                                text: tools.length + " tools";
+                                color: PleaseTheme.text3; font-size: 11px; vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    // Tool list
+                    ScrollView {
+                        vertical-stretch: 1;
+                        VerticalLayout {
+                            padding: 12px; spacing: 6px;
+                            for tool[i] in tools : SmallToolCard {
+                                tool: tool;
+                                selected: i == root.selected-tool;
+                                clicked => { root.tool-clicked(i); }
+                                run => { root.tool-run(tool.command); }
+                            }
+                        }
+                    }
+                }
+
+                // Tab: Terminal
+                if selected-tab == 1 : VerticalLayout {
+                    vertical-stretch: 1;
+                    padding: 0px;
+
+                    // Terminal output
+                    Rectangle {
+                        vertical-stretch: 1;
+                        background: #0a0c0e;
+                        border-width: 1px;
+                        border-color: PleaseTheme.border;
+
+                        ScrollView {
+                            TextEdit {
+                                text: root.terminal-output;
+                                background: transparent;
+                                color: #22e87a;
+                                font-size: 12px;
+                                read-only: true;
+                                padding: 12px;
+                            }
+                        }
+                    }
+
+                    // Input
+                    Rectangle {
+                        height: 44px;
+                        background: #0a0c0e;
+
+                        HorizontalLayout {
+                            padding-left: 12px; padding-right: 12px; spacing: 8px;
+                            Text {
+                                text: "⚔ ❯";
+                                color: PleaseTheme.accent; font-size: 12px; font-weight: 700;
+                                font-family: "JetBrains Mono, monospace";
+                                vertical-alignment: center;
+                            }
+                            LineEdit {
+                                placeholder-text: "Enter command…";
+                                horizontal-stretch: 1;
+                                font-family: "JetBrains Mono, monospace";
+                                font-size: 12px;
+                                accepted(t) => {
+                                    root.terminal-submit(t);
+                                    root.terminal-input-text = "";
+                                }
+                                edited(t) => { root.terminal-input-text = t; }
+                            }
+                        }
+                    }
+                }
+
+                // Tab: Docs (placeholder)
+                if selected-tab == 2 : Rectangle {
+                    vertical-stretch: 1;
+                    background: PleaseTheme.bg;
+                    VerticalLayout {
+                        padding: 30px; spacing: 16px;
+                        Text { text: "📖  Documentation"; color: PleaseTheme.text; font-size: 18px; font-weight: 800; }
+                        Text { text: "Red Team methodology, tool cheat sheets, and attack playbooks.";
+                            color: PleaseTheme.text2; font-size: 12px; }
+                    }
+                }
+
+                // Tab: Settings (placeholder)
+                if selected-tab == 3 : Rectangle {
+                    vertical-stretch: 1;
+                    background: PleaseTheme.bg;
+                    VerticalLayout {
+                        padding: 30px; spacing: 16px;
+                        Text { text: "⚙  Settings"; color: PleaseTheme.text; font-size: 18px; font-weight: 800; }
+                        Text { text: "Container, theme, shell, and keybinding configuration.";
+                            color: PleaseTheme.text2; font-size: 12px; }
+                    }
+                }
+            }
+        }
+
+        // Status bar
+        Rectangle {
+            height: 28px;
+            background: PleaseTheme.bg3;
+            border-width: 1px;
+            border-color: PleaseTheme.border;
+
+            HorizontalLayout {
+                padding-left: 14px; padding-right: 14px; spacing: 16px;
+                Text { text: "⚔ HackerOS CM v0.2"; color: PleaseTheme.text3; font-size: 10px; vertical-alignment: center; }
+                Rectangle { horizontal-stretch: 1; }
+                Text { text: "RedTeam Edition"; color: PleaseTheme.accent; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                Text { text: "|"; color: PleaseTheme.border; vertical-alignment: center; }
+                Text { text: "BSD-3-Clause"; color: PleaseTheme.text3; font-size: 10px; vertical-alignment: center; }
+            }
+        }
+    }
+}
