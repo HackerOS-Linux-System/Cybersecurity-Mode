@@ -1,0 +1,35 @@
+[package]
+name = "cm-bg"
+version = "0.2.0"
+edition = "2021"
+description = "CM Background setter — replaces swaybg, native Wayland wallpaper daemon"
+license = "BSD-3-Clause"
+
+[[bin]]
+name = "cm-bg"
+path = "src/main.rs"
+
+[dependencies]
+anyhow  = "1"
+clap    = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Wayland client (cm-bg is a Wayland CLIENT — not a compositor)
+wayland-client    = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+# wlr-layer-shell for rendering behind windows (like swaybg uses)
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+
+# System
+libc = "0.2"
+
+# Image loading
+image = { version = "0.25", features = ["png", "jpeg", "webp", "bmp"] }
+
+# OpenGL / EGL for rendering
+khronos-egl = { version = "6", features = ["dynamic"] }
+
+[profile.release]
+opt-level = 3
+strip     = true
