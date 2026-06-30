@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=CM Environment
+Comment=HackerOS CM Environment — full desktop session
+Exec=/usr/bin/cm environment
+TryExec=/usr/bin/cm
+Type=Application
+DesktopNames=cm-environment
+X-GDM-SessionRegistered=true
