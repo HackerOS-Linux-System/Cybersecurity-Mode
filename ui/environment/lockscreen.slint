@@ -1,0 +1,120 @@
+import { LineEdit } from "std-widgets.slint";
+
+export component LockScreen inherits Window {
+    title: "CM Lock";
+    background: #0d0e12;
+    no-frame: true;
+    always-on-top: true;
+
+    in property <string> wallpaper-path;
+    in property <image> wallpaper-path-img;
+    in property <string> username: "user";
+    in property <string> time-str: "00:00";
+    in property <string> date-str: "Monday, 01 January";
+    in property <bool> auth-failed: false;
+    in property <string> avatar-path: "";
+
+    callback unlock-attempted(string);   // password
+    callback cancel();
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // Wallpaper + blur overlay
+        Rectangle {
+            vertical-stretch: 1;
+
+            Image {
+                source: root.wallpaper-path-img;
+                width: 100%; height: 100%;
+                image-fit: cover;
+            }
+
+            // Dark overlay
+            Rectangle {
+                x: 0; y: 0; width: 100%; height: 100%;
+                background: #0d0e12cc;
+            }
+
+            // Center panel
+            Rectangle {
+                x: (parent.width - 320px) / 2;
+                y: (parent.height - 420px) / 2;
+                width: 320px; height: 420px;
+                border-radius: 16px;
+                background: #13141ae0;
+                border-width: 1px; border-color: #1e2030;
+                drop-shadow-blur: 40px;
+                drop-shadow-color: #000000.with-alpha(0.6);
+
+                VerticalLayout {
+                    padding: 32px; spacing: 20px; alignment: center;
+
+                    // HackerOS logo
+                    Image {
+                        source: @image-url("/usr/share/HackerOS/ICONS/HackerOS-Cybersecurity.png");
+                        width: 72px; height: 72px; image-fit: contain;
+                        horizontal-alignment: center;
+                    }
+
+                    // Time
+                    Text {
+                        text: time-str; color: #e8e9f0;
+                        font-size: 48px; font-weight: 800;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: date-str; color: #9098b0;
+                        font-size: 13px; horizontal-alignment: center;
+                    }
+
+                    // Username
+                    Text {
+                        text: username; color: #9098b0;
+                        font-size: 14px; font-weight: 700;
+                        horizontal-alignment: center;
+                    }
+
+                    // Password field
+                    Rectangle {
+                        height: 46px; border-radius: 10px;
+                        background: #161720;
+                        border-width: 1.5px;
+                        border-color: auth-failed ? #ef4444 : #3a4060;
+                        animate border-color { duration: 150ms; }
+
+                        HorizontalLayout {
+                            padding-left: 14px; padding-right: 14px; spacing: 8px;
+                            Text { text: "🔒"; font-size: 14px; vertical-alignment: center; }
+                            LineEdit {
+                                placeholder-text: "Password";
+                                input-type: password;
+                                horizontal-stretch: 1;
+                                font-size: 14px;
+                                accepted(pwd) => { root.unlock-attempted(pwd); }
+                            }
+                        }
+                    }
+
+                    // Error message
+                    if auth-failed : Text {
+                        text: "✕  Incorrect password";
+                        color: #ef4444; font-size: 12px; font-weight: 700;
+                        horizontal-alignment: center;
+                    }
+
+                    // Unlock button
+                    Rectangle {
+                        height: 44px; border-radius: 10px;
+                        background: #ef4444.with-alpha(0.15);
+                        border-width: 1px; border-color: #ef4444.with-alpha(0.45);
+                        ubtn := TouchArea { clicked => { } }
+                        Text { text: "Unlock"; color: #ef4444;
+                            font-size: 14px; font-weight: 700;
+                            horizontal-alignment: center; vertical-alignment: center; }
+                    }
+                }
+            }
+        }
+    }
+}
