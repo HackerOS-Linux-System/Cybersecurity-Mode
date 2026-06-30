@@ -1,0 +1,51 @@
+! CM Configuration — HackerOS Cybersecurity Mode v0.2
+! Format: hk-parser 0.3 — https://hackeros-linux-system.github.io/HackerOS-Website/tools-docs/hk.html
+! Location: ~/.config/hackeros/Cybersecurity-Mode/cm.hk
+! Auto-generated on first run. Edit to customize.
+
+[environment]
+-> default_wallpaper => /usr/share/wallpapers/HackerOS-Wallpapers/Wallpaper23.png
+-> icon_theme => BeautyLine
+-> cursor_theme => Adwaita
+-> cursor_size => 24
+-> theme_name => cybersec-dark
+-> font_ui => Inter
+-> font_mono => JetBrains Mono
+-> font_size => 10
+-> scale_factor => 1.0
+-> launcher_icon => /usr/share/HackerOS/ICONS/HackerOS-Cybersecurity.png
+-> default_terminal => /usr/share/HackerOS/Scripts/HackerOS-Apps/Hacker-Term
+-> default_browser => mullvad-browser
+-> default_file_manager => nemo
+-> default_system_monitor => stacer
+-> default_text_editor => kate
+
+[compositor]
+-> enable_xwayland => true
+-> enable_animations => true
+-> animation_duration_ms => 200
+-> blur_enabled => true
+-> blur_radius => 12
+-> window_border_radius => 8
+
+[container]
+-> name => cybersec-mode-env
+-> engine => podman
+-> image => blackarchlinux/blackarch
+-> shell => hsh
+
+[keybindings]
+-> launcher => Super
+-> terminal => Super+Return
+-> close_window => Alt+F4
+-> maximize => Super+Up
+-> tile_left => Super+Left
+-> tile_right => Super+Right
+-> screenshot => Print
+-> screenshot_region => Shift+Print
+-> lock_screen => Super+L
+-> show_desktop => Super+D
+-> file_manager => Super+E
+-> workspace_next => Super+Page_Down
+-> workspace_prev => Super+Page_Up
+-> system_monitor => Ctrl+Shift+Escape
