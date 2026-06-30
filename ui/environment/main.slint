@@ -1,0 +1,640 @@
+import { LineEdit, ScrollView } from "std-widgets.slint";
+
+global Env {
+    out property <color> bg:       #0d0e12;
+    out property <color> bg2:      #13141a;
+    out property <color> bg3:      #0a0b0f;
+    out property <color> surface:  #161720;
+    out property <color> overlay:  #0d0e12e0;
+    out property <color> border:   #1e2030;
+    out property <color> border-hi:#3a4060;
+    out property <color> text:     #e8e9f0;
+    out property <color> text2:    #9098b0;
+    out property <color> text3:    #505870;
+    out property <color> accent:   #ef4444;
+    out property <color> accent2:  #3b82f6;
+    out property <color> green:    #22c55e;
+    out property <color> orange:   #f97316;
+    out property <length> bar-h:   40px;
+    out property <length> r:       8px;
+    out property <length> rsm:     5px;
+}
+
+// ── App entry ─────────────────────────────────────────────────────────────
+export struct AppEntry {
+    name: string,
+    exec: string,
+    icon-path: string,   // runtime path from icon lookup
+    categories: string,
+    description: string,
+}
+
+// ── Open window for taskbar ───────────────────────────────────────────────
+export struct OpenWindow {
+    id: int,
+    title: string,
+    app-id: string,
+    minimized: bool,
+    focused: bool,
+    workspace: int,
+}
+
+// ── Notification popup ────────────────────────────────────────────────────
+export struct NotifData {
+    id: int,
+    app-name: string,
+    summary: string,
+    body: string,
+    icon: string,
+    urgency: int,   // 0=low 1=normal 2=critical
+}
+
+// ── Launcher grid item ────────────────────────────────────────────────────
+component LauncherItem inherits Rectangle {
+    in property <AppEntry> app;
+    callback activated();
+
+    width: 96px; height: 108px;
+    border-radius: Env.r;
+    background: ta.has-hover ? Env.surface : transparent;
+    animate background { duration: 100ms; }
+
+    ta := TouchArea {
+        double-clicked => { root.activated(); }
+    }
+
+    VerticalLayout {
+        spacing: 8px; padding: 8px; alignment: center;
+
+        // Icon (runtime path via Image)
+        Rectangle {
+            width: 56px; height: 56px; border-radius: 14px;
+            background: Env.surface;
+            border-width: 1px;
+            border-color: ta.has-hover ? Env.accent.with-alpha(0.35) : Env.border;
+            horizontal-alignment: center;
+            animate border-color { duration: 100ms; }
+
+            if app.icon-path != "" : Image {
+                source: @image-url("");  // icon loaded at runtime via compositor
+                width: 40px; height: 40px;
+                image-fit: contain;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
+            if app.icon-path == "" : Text {
+                text: "📦"; font-size: 26px;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
+        }
+
+        Text {
+            text: app.name;
+            color: ta.has-hover ? Env.text : Env.text2;
+            font-size: 11px; horizontal-alignment: center;
+            overflow: elide;
+            animate color { duration: 100ms; }
+        }
+    }
+}
+
+// ── App launcher overlay ──────────────────────────────────────────────────
+component Launcher inherits Rectangle {
+    in property <[AppEntry]> apps;
+    in property <string> launcher-icon;
+        out property <string> search-text: "";
+    callback app-activated(string);   // exec
+    callback close-launcher();
+
+    background: Env.overlay;
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // Top search bar
+        Rectangle {
+            height: 68px;
+            background: Env.bg2;
+            border-width: 1px; border-color: Env.border;
+
+            HorizontalLayout {
+                padding-left: 32px; padding-right: 32px; spacing: 14px;
+
+                // Custom launcher icon
+                Rectangle {
+                    width: 40px; height: 40px; border-radius: 10px;
+                    background: Env.accent.with-alpha(0.12);
+                    border-width: 1px; border-color: Env.accent.with-alpha(0.3);
+                    y: (parent.height - 40px) / 2;
+                    Image {
+                        source: root.launcher-icon-img;
+                        width: 28px; height: 28px; image-fit: contain;
+                        horizontal-alignment: center; vertical-alignment: center;
+                    }
+                }
+
+                // Search box
+                Rectangle {
+                    horizontal-stretch: 1; max-width: 560px;
+                    height: 42px;
+                    border-radius: Env.r;
+                    background: Env.surface;
+                    border-width: 1.5px; border-color: Env.accent.with-alpha(0.45);
+                    y: (parent.height - 42px) / 2;
+
+                    HorizontalLayout {
+                        padding-left: 14px; spacing: 10px;
+                        Text {
+                            text: "⌕"; font-size: 16px; color: Env.text3;
+                            vertical-alignment: center;
+                        }
+                        LineEdit {
+                            placeholder-text: "Search applications…";
+                            horizontal-stretch: 1;
+                            font-size: 14px;
+                            edited(t) => { root.search-text = t; }
+                        }
+                    }
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                // ESC hint
+                Rectangle {
+                    width: 36px; height: 22px; border-radius: 4px;
+                    background: Env.surface; border-width: 1px; border-color: Env.border;
+                    y: (parent.height - 22px) / 2;
+                    Text { text: "ESC"; color: Env.text3; font-size: 10px;
+                        horizontal-alignment: center; vertical-alignment: center; }
+                    esc-ta := TouchArea { clicked => { root.close-launcher(); } }
+                }
+            }
+        }
+
+        // App grid
+        ScrollView {
+            vertical-stretch: 1;
+            viewport-width: root.width;
+
+            VerticalLayout {
+                padding-top: 24px; padding-left: 32px; padding-right: 32px; padding-bottom: 24px;
+                spacing: 20px;
+
+                Text {
+                    text: "APPLICATIONS";
+                    color: Env.text3; font-size: 9px; font-weight: 700; letter-spacing: 2px;
+                }
+
+                // Horizontal flow of app icons
+                HorizontalLayout {
+                    spacing: 6px; wrap: true;
+                    for app in apps : LauncherItem {
+                        app: app;
+                        activated => { root.app-activated(app.exec); }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dismiss on click outside
+    bg-ta := TouchArea {
+        clicked => { root.close-launcher(); }
+    }
+
+    FocusScope {
+        key-released(ev) => {
+            if ev.text == Key.Escape { root.close-launcher(); }
+            accept
+        }
+    }
+}
+
+// ── Taskbar: single unified bottom bar ───────────────────────────────────
+// Contains: launcher | workspace dots | open windows | tray | clock | power
+component UnifiedTaskbar inherits Rectangle {
+    in property <string> launcher-icon;
+        in property <[OpenWindow]> windows;
+    in property <int> active-workspace;
+    in property <int> workspace-count;
+    in property <string> time-str;
+    in property <string> date-str;
+    in property <bool> container-running;
+    in property <bool> launcher-open;
+    in property <[NotifData]> notifications;
+
+    callback launcher-clicked();
+    callback window-clicked(int);
+    callback workspace-clicked(int);
+    callback settings-clicked();
+    callback power-clicked();
+    callback notif-clicked();
+
+    height: Env.bar-h;
+    background: Env.bg3;
+    border-width: 1px;
+    border-color: Env.border;
+
+    HorizontalLayout {
+        padding-left: 4px; padding-right: 6px; spacing: 0px;
+
+        // ── Launcher button (HackerOS custom icon) ────────────────────
+        Rectangle {
+            width: 44px; height: Env.bar-h; border-radius: Env.rsm;
+            background: launcher-open
+                ? Env.accent.with-alpha(0.2)
+                : (lta.has-hover ? Env.accent.with-alpha(0.1) : transparent);
+            border-width: launcher-open ? 1px : 0px;
+            border-color: Env.accent.with-alpha(0.4);
+            animate background { duration: 100ms; }
+
+            lta := TouchArea { clicked => { root.launcher-clicked(); } }
+
+            Image {
+                source: root.launcher-icon-img;
+                width: 26px; height: 26px; image-fit: contain;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
+        }
+
+        // Divider
+        Rectangle { width: 1px; background: Env.border; margin-top: 8px; margin-bottom: 8px; }
+
+        // ── Workspace dots ────────────────────────────────────────────
+        HorizontalLayout {
+            spacing: 3px; padding-left: 6px; padding-right: 6px;
+            for i in workspace-count : Rectangle {
+                width: 26px; height: 26px; border-radius: 5px;
+                background: i == active-workspace
+                    ? Env.accent.with-alpha(0.18)
+                    : (wta.has-hover ? Env.surface : transparent);
+                border-width: i == active-workspace ? 1px : 0px;
+                border-color: Env.accent.with-alpha(0.4);
+                y: (Env.bar-h - 26px) / 2;
+                animate background { duration: 80ms; }
+
+                wta := TouchArea { clicked => { root.workspace-clicked(i); } }
+                Text {
+                    text: i + 1; color: i == active-workspace ? Env.accent : Env.text3;
+                    font-size: 10px; font-weight: 700;
+                    horizontal-alignment: center; vertical-alignment: center;
+                }
+            }
+        }
+
+        // Divider
+        Rectangle { width: 1px; background: Env.border; margin-top: 8px; margin-bottom: 8px; }
+
+        // ── Open windows (taskbar buttons) ────────────────────────────
+        HorizontalLayout {
+            horizontal-stretch: 1; spacing: 2px; padding-left: 4px;
+            for w in windows : Rectangle {
+                width: 150px; max-width: 180px; height: 32px;
+                border-radius: Env.rsm;
+                background: w.focused
+                    ? Env.accent.with-alpha(0.1)
+                    : (wbta.has-hover ? Env.surface : transparent);
+                border-width: w.focused ? 1px : 0px;
+                border-color: Env.accent.with-alpha(0.3);
+                y: (Env.bar-h - 32px) / 2;
+                animate background { duration: 80ms; }
+
+                wbta := TouchArea { clicked => { root.window-clicked(w.id); } }
+                HorizontalLayout {
+                    padding-left: 8px; padding-right: 8px; spacing: 6px;
+                    Rectangle {
+                        width: 3px; height: 14px; border-radius: 1.5px;
+                        background: w.focused ? Env.accent : transparent;
+                        y: (parent.height - 14px) / 2;
+                    }
+                    Text {
+                        text: w.app-id;
+                        color: w.focused ? Env.text : Env.text2;
+                        font-size: 11px; overflow: elide;
+                        horizontal-stretch: 1; vertical-alignment: center;
+                    }
+                    if w.minimized : Rectangle {
+                        width: 6px; height: 6px; border-radius: 3px;
+                        background: Env.text3; y: (parent.height - 6px) / 2;
+                    }
+                }
+            }
+        }
+
+        // ── System tray area ──────────────────────────────────────────
+        HorizontalLayout {
+            spacing: 2px; padding-right: 4px;
+
+            // Container status dot
+            Rectangle {
+                width: 28px; height: 28px; border-radius: 5px;
+                background: container-running ? Env.green.with-alpha(0.12) : Env.surface;
+                border-width: 1px;
+                border-color: container-running ? Env.green.with-alpha(0.35) : Env.border;
+                y: (Env.bar-h - 28px) / 2;
+                Text { text: "🐳"; font-size: 13px;
+                    horizontal-alignment: center; vertical-alignment: center; }
+            }
+
+            // Notification bell
+            Rectangle {
+                width: 28px; height: 28px; border-radius: 5px;
+                background: notifications.length > 0 ? Env.orange.with-alpha(0.12) : Env.surface;
+                border-width: 1px;
+                border-color: notifications.length > 0 ? Env.orange.with-alpha(0.35) : Env.border;
+                y: (Env.bar-h - 28px) / 2;
+                nta := TouchArea { clicked => { root.notif-clicked(); } }
+                Text {
+                    text: notifications.length > 0 ? "🔔" : "🔕";
+                    font-size: 13px;
+                    horizontal-alignment: center; vertical-alignment: center;
+                }
+                // Badge
+                if notifications.length > 0 : Rectangle {
+                    x: 16px; y: 2px;
+                    width: 14px; height: 14px; border-radius: 7px;
+                    background: Env.accent;
+                    Text { text: notifications.length > 9 ? "9+" : notifications.length;
+                        color: #fff; font-size: 8px; font-weight: 700;
+                        horizontal-alignment: center; vertical-alignment: center; }
+                }
+            }
+        }
+
+        // Divider
+        Rectangle { width: 1px; background: Env.border; margin-top: 8px; margin-bottom: 8px; }
+
+        // ── Clock + date ──────────────────────────────────────────────
+        Rectangle {
+            width: 88px;
+            clkta := TouchArea {}
+            VerticalLayout {
+                alignment: center; spacing: 1px;
+                Text {
+                    text: time-str; color: Env.text;
+                    font-size: 13px; font-weight: 700;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: date-str; color: Env.text3; font-size: 9px;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        // Divider
+        Rectangle { width: 1px; background: Env.border; margin-top: 8px; margin-bottom: 8px; }
+
+        // ── Settings ──────────────────────────────────────────────────
+        Rectangle {
+            width: 30px; height: 30px; border-radius: Env.rsm;
+            background: sta.has-hover ? Env.surface : transparent;
+            y: (Env.bar-h - 30px) / 2;
+            sta := TouchArea { clicked => { root.settings-clicked(); } }
+            Text { text: "⚙"; font-size: 14px; color: Env.text3;
+                horizontal-alignment: center; vertical-alignment: center;
+                animate color { duration: 80ms; }
+            }
+        }
+
+        // ── Power ─────────────────────────────────────────────────────
+        Rectangle {
+            width: 30px; height: 30px; border-radius: Env.rsm;
+            background: pwrta.has-hover ? Env.accent.with-alpha(0.12) : transparent;
+            y: (Env.bar-h - 30px) / 2;
+            pwrta := TouchArea { clicked => { root.power-clicked(); } }
+            Text { text: "⏻"; font-size: 14px;
+                color: pwrta.has-hover ? Env.accent : Env.text3;
+                horizontal-alignment: center; vertical-alignment: center;
+                animate color { duration: 80ms; }
+            }
+        }
+    }
+}
+
+// ── Notification popup ────────────────────────────────────────────────────
+component NotifPopup inherits Rectangle {
+    in property <NotifData> notif;
+    callback dismissed(int);
+
+    width: 340px;
+    border-radius: Env.r;
+    background: Env.bg2;
+    border-width: 1px;
+    border-color: notif.urgency == 2 ? Env.accent.with-alpha(0.5) : Env.border;
+    drop-shadow-blur: 20px;
+    drop-shadow-color: #000000.with-alpha(0.5);
+    animate border-color { duration: 200ms; }
+
+    HorizontalLayout {
+        padding: 14px; spacing: 12px;
+
+        // Urgency indicator
+        Rectangle {
+            width: 3px; border-radius: 1.5px;
+            background: notif.urgency == 2 ? Env.accent
+                : notif.urgency == 0 ? Env.text3 : Env.accent2;
+        }
+
+        Text { text: notif.icon; font-size: 20px; vertical-alignment: center; }
+
+        VerticalLayout {
+            spacing: 4px; horizontal-stretch: 1;
+            HorizontalLayout {
+                Text { text: notif.app-name; color: Env.text3; font-size: 10px;
+                    font-weight: 700; letter-spacing: 0.5px; horizontal-stretch: 1; }
+            }
+            Text { text: notif.summary; color: Env.text; font-size: 13px; font-weight: 700; }
+            if notif.body != "" : Text {
+                text: notif.body; color: Env.text2; font-size: 11px; wrap: word-wrap;
+            }
+        }
+
+        Rectangle {
+            width: 20px; height: 20px; border-radius: 4px;
+            background: Env.surface;
+            cls := TouchArea { clicked => { root.dismissed(notif.id); } }
+            Text { text: "✕"; color: Env.text3; font-size: 10px;
+                horizontal-alignment: center; vertical-alignment: center; }
+        }
+    }
+}
+
+// ── Power menu ────────────────────────────────────────────────────────────
+component PowerMenu inherits Rectangle {
+    callback shutdown();
+    callback reboot();
+    callback suspend();
+    callback lock();
+    callback logout();
+    callback close();
+
+    width: 180px;
+    border-radius: Env.r;
+    background: Env.bg2;
+    border-width: 1px; border-color: Env.border;
+    drop-shadow-blur: 20px;
+    drop-shadow-color: #000000.with-alpha(0.5);
+
+    VerticalLayout {
+        padding: 8px; spacing: 2px;
+
+        for action in [
+            {label: "⏻  Shutdown",   accent: true},
+            {label: "↺  Reboot",     accent: false},
+            {label: "⏾  Suspend",    accent: false},
+            {label: "🔒  Lock Screen",accent: false},
+            {label: "⎋  Log Out",    accent: false},
+        ] : Rectangle {
+            height: 38px; border-radius: Env.rsm;
+            background: ita.has-hover
+                ? (action.accent ? Env.accent.with-alpha(0.15) : Env.surface)
+                : transparent;
+            animate background { duration: 80ms; }
+
+            ita := TouchArea { clicked => {
+                if action.label == "⏻  Shutdown"    { root.shutdown(); }
+                else if action.label == "↺  Reboot" { root.reboot(); }
+                else if action.label == "⏾  Suspend"{ root.suspend(); }
+                else if action.label == "🔒  Lock Screen"{ root.lock(); }
+                else                                 { root.logout(); }
+                root.close();
+            } }
+
+            Text {
+                text: action.label;
+                color: action.accent ? Env.accent : Env.text;
+                font-size: 12px; vertical-alignment: center;
+                padding-left: 14px;
+                font-weight: action.accent ? 700 : 400;
+            }
+        }
+    }
+}
+
+// ── Main Environment Shell ────────────────────────────────────────────────
+export component EnvironmentShell inherits Window {
+    title: "CM Environment";
+    background: Env.bg;
+    no-frame: true;
+
+    // Inputs from Rust
+    in property <string> wallpaper-path;
+    in property <image> wallpaper-path-img;
+    in property <string> launcher-icon;
+    in property <image> launcher-icon-img;
+    in property <[AppEntry]> apps: [];
+    in property <[OpenWindow]> open-windows: [];
+    in property <int> active-workspace: 0;
+    in property <int> workspace-count: 4;
+    in property <string> time-str: "00:00";
+    in property <string> date-str: "Mon 01 Jan";
+    in property <bool> container-running: false;
+    in property <[NotifData]> notifications: [];
+    in-out property <bool> launcher-open: false;
+    in-out property <bool> power-menu-open: false;
+
+    // Callbacks to Rust
+    // System stats (updated by Rust every 2s)
+    in property <int>  cpu-percent: 0;
+    in property <int>  ram-percent: 0;
+    in property <int>  ram-used-mb: 0;
+    in property <int>  net-rx-kb: 0;
+    in property <int>  net-tx-kb: 0;
+    in property <int>  taskbar-height: 40;
+
+    // Callbacks used by Rust
+    callback launch-app(int);          // launch app at index
+    callback search-apps(string);      // filter app list
+    callback app-launched(string);
+    callback window-focused(int);
+    callback window-minimized(int);
+    callback window-closed(int);
+    callback workspace-changed(int);
+    callback switch-workspace(int);
+    callback settings-opened();
+    callback shutdown-requested();
+    callback reboot-requested();
+    callback suspend-requested();
+    callback lock-requested();
+    callback lock-screen();
+    callback logout-requested();
+    callback notif-dismissed(int);
+    callback dismiss-notification(int);
+    callback container-toggle();
+    callback set-wallpaper(string);
+    callback clipboard-copy(int);
+    callback clipboard-pin(int);
+    callback clipboard-delete(int);
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // Desktop area — wallpaper + windows managed by compositor
+        Rectangle {
+            vertical-stretch: 1;
+
+            // Wallpaper
+            Image {
+                source: root.wallpaper-path-img;
+                width: 100%; height: 100%;
+                image-fit: cover;
+            }
+
+            // Launcher overlay
+            if launcher-open : Launcher {
+                x: 0; y: 0; width: 100%; height: 100%;
+                apps: root.apps;
+                launcher-icon: root.launcher-icon;
+                app-activated(exec) => {
+                    root.app-launched(exec);
+                    root.launcher-open = false;
+                }
+                close-launcher => { root.launcher-open = false; }
+            }
+
+            // Power menu (anchored above power button — bottom right)
+            if power-menu-open : Rectangle {
+                x: root.width - 190px;
+                y: root.height - Env.bar-h - 220px;
+                PowerMenu {
+                    shutdown => { root.shutdown-requested(); }
+                    reboot   => { root.reboot-requested(); }
+                    suspend  => { root.suspend-requested(); }
+                    lock     => { root.lock-requested(); }
+                    logout   => { root.logout-requested(); }
+                    close    => { root.power-menu-open = false; }
+                }
+            }
+
+            // Notification stack — top right corner
+            VerticalLayout {
+                x: root.width - 360px; y: 10px;
+                spacing: 8px; width: 350px;
+                for n in notifications : NotifPopup {
+                    notif: n;
+                    dismissed(id) => { root.notif-dismissed(id); }
+                }
+            }
+        }
+
+        // Single unified taskbar at bottom
+        UnifiedTaskbar {
+            launcher-icon:    root.launcher-icon;
+            windows:          root.open-windows;
+            active-workspace: root.active-workspace;
+            workspace-count:  root.workspace-count;
+            time-str:         root.time-str;
+            date-str:         root.date-str;
+            container-running:root.container-running;
+            launcher-open:    root.launcher-open;
+            notifications:    root.notifications;
+
+            launcher-clicked  => { root.launcher-open = !root.launcher-open; }
+            window-clicked(id)=> { root.window-focused(id); }
+            workspace-clicked(i) => { root.workspace-changed(i); }
+            settings-clicked  => { root.settings-opened(); }
+            power-clicked     => { root.power-menu-open = !root.power-menu-open; }
+            notif-clicked     => { root.power-menu-open = false; }
+        }
+    }
+}
