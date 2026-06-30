@@ -1,1 +1,826 @@
+import { Button, VerticalBox, HorizontalBox, LineEdit, ScrollView } from "std-widgets.slint";
 
+// ── Color tokens ─────────────────────────────────────────────────────────
+global Theme {
+    // Dark background — #0d0e12 family
+    out property <color> bg-primary:    #0d0e12;
+    out property <color> bg-secondary:  #13141a;
+    out property <color> bg-tertiary:   #0a0b0f;
+    out property <color> bg-card:       #161720;
+    out property <color> bg-hover:      #1e2030;
+    out property <color> bg-input:      #111218;
+
+    out property <color> border:        #1e2030;
+    out property <color> border-focus:  #3a4060;
+
+    out property <color> text-primary:  #e8e9f0;
+    out property <color> text-secondary:#9098b0;
+    out property <color> text-muted:    #505870;
+
+    out property <color> accent-red:    #ef4444;
+    out property <color> accent-orange: #f97316;
+    out property <color> accent-yellow: #eab308;
+    out property <color> accent-green:  #22c55e;
+    out property <color> accent-blue:   #3b82f6;
+
+    out property <color> success:       #22c55e;
+    out property <color> danger:        #ef4444;
+
+    out property <length> taskbar-h:    48px;
+    out property <length> sidebar-w:    220px;
+    out property <length> card-radius:  10px;
+    out property <length> radius-sm:    6px;
+}
+
+// ── Data types ────────────────────────────────────────────────────────────
+export struct ToolData {
+    name: string,
+    display-name: string,
+    description: string,
+    long-description: string,
+    icon: string,
+    category: string,
+    subcategory: string,
+    command: string,
+    color: color,
+    difficulty: string,  // "Beginner" | "Intermediate" | "Advanced" | "Expert"
+    installed: bool,
+    running: bool,
+    tags: string,        // comma-separated
+    website: string,
+    is-gui: bool,
+    package: string,
+}
+
+// ── Tool card (store style) ───────────────────────────────────────────────
+component ToolCard inherits Rectangle {
+    in property <ToolData> tool;
+    in property <bool> selected: false;
+    callback clicked();
+    callback run();
+    callback install();
+
+    width: 280px;
+    height: 200px;
+    border-radius: Theme.card-radius;
+    background: selected ? tool.color.with-alpha(0.12) : Theme.bg-card;
+    border-width: selected ? 1.5px : 1px;
+    border-color: selected ? tool.color : Theme.border;
+
+    // Hover animation
+    animate background { duration: 120ms; }
+    animate border-color { duration: 120ms; }
+
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 10px;
+
+        // Header: icon + name + difficulty badge
+        HorizontalLayout {
+            spacing: 10px;
+            alignment: start;
+
+            // Icon bubble
+            Rectangle {
+                width: 40px; height: 40px;
+                border-radius: 10px;
+                background: tool.color.with-alpha(0.15);
+                border-width: 1px;
+                border-color: tool.color.with-alpha(0.3);
+
+                Text {
+                    text: tool.icon;
+                    font-size: 20px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            VerticalLayout {
+                spacing: 3px;
+                Text {
+                    text: tool.display-name;
+                    color: tool.color;
+                    font-size: 13px;
+                    font-weight: 700;
+                    overflow: elide;
+                }
+                Text {
+                    text: tool.subcategory;
+                    color: Theme.text-muted;
+                    font-size: 10px;
+                    letter-spacing: 0.5px;
+                }
+            }
+
+            // Spacer
+            Rectangle { horizontal-stretch: 1; }
+
+            // Difficulty badge
+            Rectangle {
+                width: 70px; height: 18px;
+                border-radius: 4px;
+                background: difficulty-bg(tool.difficulty);
+                border-width: 0px;
+
+                Text {
+                    text: tool.difficulty;
+                    font-size: 9px;
+                    font-weight: 700;
+                    color: difficulty-color(tool.difficulty);
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    letter-spacing: 0.5px;
+                }
+            }
+        }
+
+        // Description
+        Text {
+            text: tool.description;
+            color: Theme.text-secondary;
+            font-size: 11px;
+            wrap: word-wrap;
+            vertical-stretch: 1;
+            max-height: 40px;
+        }
+
+        // Tags
+        HorizontalLayout {
+            spacing: 4px;
+            alignment: start;
+            Text {
+                text: tool.tags;
+                color: Theme.text-muted;
+                font-size: 9px;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+        }
+
+        // Action buttons
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: end;
+
+            // Run button
+            if tool.installed : Rectangle {
+                width: 60px; height: 26px;
+                border-radius: Theme.radius-sm;
+                background: tool.running
+                    ? Theme.danger.with-alpha(0.2)
+                    : tool.color.with-alpha(0.18);
+                border-width: 1px;
+                border-color: tool.running
+                    ? Theme.danger.with-alpha(0.5)
+                    : tool.color.with-alpha(0.5);
+
+                run-ta := TouchArea { clicked => { root.run(); } }
+                Text {
+                    text: tool.running ? "■ Stop" : "▶ Run";
+                    color: tool.running ? Theme.danger : tool.color;
+                    font-size: 10px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                animate background { duration: 100ms; }
+            }
+
+            // Install button
+            if !tool.installed : Rectangle {
+                width: 70px; height: 26px;
+                border-radius: Theme.radius-sm;
+                background: Theme.accent-green.with-alpha(0.1);
+                border-width: 1px;
+                border-color: Theme.accent-green.with-alpha(0.4);
+
+                inst-ta := TouchArea { clicked => { root.install(); } }
+                Text {
+                    text: "⬇ Install";
+                    color: Theme.accent-green;
+                    font-size: 10px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            // Info arrow
+            Rectangle {
+                width: 26px; height: 26px;
+                border-radius: Theme.radius-sm;
+                background: Theme.bg-hover;
+                border-width: 1px;
+                border-color: Theme.border;
+                info-ta := TouchArea { clicked => { root.clicked(); } }
+                Text { text: "›"; color: Theme.text-muted; font-size: 14px;
+                    horizontal-alignment: center; vertical-alignment: center; }
+            }
+        }
+    }
+
+    // Installed indicator dot
+    if tool.installed : Rectangle {
+        x: 10px; y: 10px;
+        width: 6px; height: 6px;
+        border-radius: 3px;
+        background: Theme.success;
+    }
+
+    // Pure functions for difficulty colors
+    pure function difficulty-bg(d: string) -> color {
+        if d == "Beginner" { return Theme.accent-green.with-alpha(0.15); }
+        if d == "Intermediate" { return Theme.accent-yellow.with-alpha(0.15); }
+        if d == "Advanced" { return Theme.accent-orange.with-alpha(0.15); }
+        return Theme.accent-red.with-alpha(0.15);  // Expert
+    }
+    pure function difficulty-color(d: string) -> color {
+        if d == "Beginner" { return Theme.accent-green; }
+        if d == "Intermediate" { return Theme.accent-yellow; }
+        if d == "Advanced" { return Theme.accent-orange; }
+        return Theme.accent-red;
+    }
+}
+
+// ── Tool detail panel ─────────────────────────────────────────────────────
+component ToolDetail inherits Rectangle {
+    in property <ToolData> tool;
+    callback run();
+    callback install();
+    callback close-panel();
+
+    background: Theme.bg-secondary;
+    border-width: 1px;
+    border-color: Theme.border;
+    border-radius: Theme.card-radius;
+
+    VerticalLayout {
+        padding: 24px;
+        spacing: 16px;
+
+        // Header
+        HorizontalLayout {
+            spacing: 14px;
+            alignment: center;
+
+            Rectangle {
+                width: 56px; height: 56px;
+                border-radius: 14px;
+                background: tool.color.with-alpha(0.15);
+                border-width: 1.5px;
+                border-color: tool.color.with-alpha(0.4);
+                Text {
+                    text: tool.icon;
+                    font-size: 28px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: tool.display-name;
+                    color: tool.color;
+                    font-size: 18px;
+                    font-weight: 800;
+                }
+                Text {
+                    text: tool.category + " › " + tool.subcategory;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    Rectangle {
+                        width: 70px; height: 18px; border-radius: 4px;
+                        background: tool.color.with-alpha(0.12);
+                        border-width: 1px; border-color: tool.color.with-alpha(0.3);
+                        Text { text: tool.difficulty; font-size: 9px; font-weight: 700;
+                            color: tool.color; horizontal-alignment: center;
+                            vertical-alignment: center; letter-spacing: 0.5px; }
+                    }
+                    if tool.is-gui : Rectangle {
+                        width: 40px; height: 18px; border-radius: 4px;
+                        background: Theme.accent-blue.with-alpha(0.12);
+                        border-width: 1px; border-color: Theme.accent-blue.with-alpha(0.3);
+                        Text { text: "GUI"; font-size: 9px; font-weight: 700;
+                            color: Theme.accent-blue; horizontal-alignment: center;
+                            vertical-alignment: center; }
+                    }
+                }
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            // Close
+            Rectangle {
+                width: 28px; height: 28px; border-radius: 6px;
+                background: Theme.bg-hover;
+                close-ta := TouchArea { clicked => { root.close-panel(); } }
+                Text { text: "✕"; color: Theme.text-muted; font-size: 12px;
+                    horizontal-alignment: center; vertical-alignment: center; }
+            }
+        }
+
+        // Divider
+        Rectangle { height: 1px; background: Theme.border; }
+
+        // Long description
+        Text {
+            text: tool.long-description;
+            color: Theme.text-secondary;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+
+        // Command
+        VerticalLayout {
+            spacing: 6px;
+            Text { text: "COMMAND"; color: Theme.text-muted; font-size: 9px;
+                font-weight: 700; letter-spacing: 1.5px; }
+            Rectangle {
+                height: 36px;
+                border-radius: Theme.radius-sm;
+                background: Theme.bg-tertiary;
+                border-width: 1px; border-color: Theme.border;
+                HorizontalLayout {
+                    padding-left: 12px; padding-right: 12px;
+                    Text {
+                        text: tool.command;
+                        color: tool.color;
+                        font-size: 12px;
+                        font-family: "JetBrains Mono, monospace";
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        // Install status
+        Rectangle {
+            height: 40px;
+            border-radius: Theme.radius-sm;
+            background: tool.installed
+                ? Theme.success.with-alpha(0.1)
+                : Theme.text-muted.with-alpha(0.08);
+            border-width: 1px;
+            border-color: tool.installed
+                ? Theme.success.with-alpha(0.3)
+                : Theme.border;
+            HorizontalLayout {
+                padding-left: 14px; padding-right: 14px;
+                spacing: 8px;
+                Rectangle {
+                    width: 8px; height: 8px; border-radius: 4px;
+                    background: tool.installed ? Theme.success : Theme.text-muted;
+                }
+                Text {
+                    text: tool.installed ? "Installed" : "Not installed";
+                    color: tool.installed ? Theme.success : Theme.text-muted;
+                    font-size: 12px; font-weight: 700;
+                    vertical-alignment: center;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Text {
+                    text: tool.package;
+                    color: Theme.text-muted; font-size: 10px;
+                    font-family: "JetBrains Mono, monospace";
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        Rectangle { vertical-stretch: 1; }
+
+        // Action buttons
+        HorizontalLayout {
+            spacing: 8px;
+
+            if tool.installed : Rectangle {
+                height: 40px; horizontal-stretch: 1;
+                border-radius: Theme.radius-sm;
+                background: tool.color.with-alpha(0.15);
+                border-width: 1px; border-color: tool.color.with-alpha(0.5);
+                run-ta := TouchArea { clicked => { root.run(); } }
+                Text { text: "▶  Run " + tool.display-name;
+                    color: tool.color; font-size: 13px; font-weight: 700;
+                    horizontal-alignment: center; vertical-alignment: center; }
+                animate background { duration: 100ms; }
+            }
+
+            if !tool.installed : Rectangle {
+                height: 40px; horizontal-stretch: 1;
+                border-radius: Theme.radius-sm;
+                background: Theme.accent-green.with-alpha(0.15);
+                border-width: 1px; border-color: Theme.accent-green.with-alpha(0.5);
+                inst-ta := TouchArea { clicked => { root.install(); } }
+                Text { text: "⬇  Install " + tool.display-name;
+                    color: Theme.accent-green; font-size: 13px; font-weight: 700;
+                    horizontal-alignment: center; vertical-alignment: center; }
+            }
+
+            Rectangle {
+                width: 40px; height: 40px;
+                border-radius: Theme.radius-sm;
+                background: Theme.bg-hover;
+                border-width: 1px; border-color: Theme.border;
+                Text { text: "🌐"; font-size: 16px;
+                    horizontal-alignment: center; vertical-alignment: center; }
+            }
+        }
+    }
+}
+
+// ── Category sidebar item ─────────────────────────────────────────────────
+component CategoryItem inherits Rectangle {
+    in property <string> label;
+    in property <int> count;
+    in property <bool> selected;
+    in property <color> accent;
+    callback clicked();
+
+    height: 38px;
+    border-radius: Theme.radius-sm;
+    background: selected ? accent.with-alpha(0.12) : transparent;
+    border-width: selected ? 1px : 0px;
+    border-color: accent.with-alpha(0.3);
+
+    animate background { duration: 100ms; }
+
+    ta := TouchArea { clicked => { root.clicked(); } }
+
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 12px;
+        Text {
+            text: label;
+            color: selected ? accent : Theme.text-muted;
+            font-size: 12px;
+            font-weight: selected ? 700 : 400;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        if count > 0 : Rectangle {
+            width: 26px; height: 18px;
+            border-radius: 9px;
+            background: Theme.bg-hover;
+            Text {
+                text: count;
+                color: Theme.text-muted;
+                font-size: 9px;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
+        }
+    }
+}
+
+// ── Container status strip ────────────────────────────────────────────────
+component ContainerStrip inherits Rectangle {
+    in property <bool> running;
+    in property <string> engine: "podman";
+    callback toggle();
+
+    height: 44px;
+    background: Theme.bg-secondary;
+    border-width: 1px;
+    border-color: running ? Theme.accent-green.with-alpha(0.25) : Theme.border;
+    border-radius: Theme.radius-sm;
+
+    animate border-color { duration: 200ms; }
+
+    HorizontalLayout {
+        padding-left: 14px; padding-right: 14px; spacing: 10px;
+
+        Rectangle {
+            width: 8px; height: 8px; border-radius: 4px;
+            background: running ? Theme.accent-green : Theme.danger;
+            animate background { duration: 300ms; }
+        }
+        Text {
+            text: running
+                ? "cybersec-mode-env  ─  running  ─  blackarchlinux/blackarch"
+                : "Container stopped  ─  BlackArch Linux";
+            color: running ? Theme.text-secondary : Theme.text-muted;
+            font-size: 11px;
+            font-family: "JetBrains Mono, monospace";
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        Rectangle {
+            width: 60px; height: 28px; border-radius: Theme.radius-sm;
+            background: running
+                ? Theme.danger.with-alpha(0.1)
+                : Theme.accent-green.with-alpha(0.1);
+            border-width: 1px;
+            border-color: running
+                ? Theme.danger.with-alpha(0.4)
+                : Theme.accent-green.with-alpha(0.4);
+            ta := TouchArea { clicked => { root.toggle(); } }
+            Text {
+                text: running ? "■ Stop" : "▶ Start";
+                color: running ? Theme.danger : Theme.accent-green;
+                font-size: 10px; font-weight: 700;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
+        }
+        Rectangle {
+            width: 50px; height: 20px; border-radius: 4px;
+            background: Theme.bg-hover;
+            border-width: 1px; border-color: Theme.border;
+            Text { text: engine; color: Theme.text-muted;
+                font-size: 9px; horizontal-alignment: center; vertical-alignment: center;
+                font-family: "JetBrains Mono, monospace"; }
+        }
+    }
+}
+
+// ── Main Mode Window ──────────────────────────────────────────────────────
+export component ModeMainWindow inherits Window {
+    title: "CM Mode — Red Team";
+    background: Theme.bg-primary;
+    min-width: 1280px;
+    min-height: 800px;
+
+    // Properties (set from Rust)
+    in property <[ToolData]> tools: [];
+    in property <[string]> categories: ["All", "Recon", "Web", "Exploit", "Passwords", "Network", "Wireless", "Forensics", "Post-Exploit", "Social Engineering", "Evasion"];
+    in property <bool> container-running: false;
+    in property <string> container-engine: "podman";
+    in property <int> selected-tool-index: -1;
+    in property <string> search-query: "";
+
+    out property <string> active-category: "All";
+    out property <int> tool-count: tools.length;
+
+    callback container-toggle();
+    callback tool-run(string);   // tool name
+    callback tool-install(string);
+    callback tool-selected(int);
+    callback search-changed(string);
+    callback category-changed(string);
+
+    // Layout: titlebar + body
+    VerticalLayout {
+        spacing: 0px;
+
+        // ── Titlebar ──────────────────────────────────────────────────
+        Rectangle {
+            height: 40px;
+            background: Theme.bg-tertiary;
+            border-width: 1px;
+            border-color: Theme.border;
+
+            HorizontalLayout {
+                padding-left: 12px; padding-right: 12px; spacing: 10px;
+
+                // Logo + title
+                Text {
+                    text: "⚔";
+                    font-size: 16px;
+                    color: Theme.accent-red;
+                    vertical-alignment: center;
+                }
+                Text {
+                    text: "CM MODE";
+                    color: Theme.text-primary;
+                    font-size: 13px; font-weight: 800;
+                    letter-spacing: 2px;
+                    vertical-alignment: center;
+                }
+                Rectangle {
+                    width: 8px; height: 8px; border-radius: 4px;
+                    background: Theme.accent-red;
+                    y: (parent.height - 8px) / 2;
+                }
+                Text {
+                    text: "RED TEAM";
+                    color: Theme.accent-red;
+                    font-size: 10px; font-weight: 700;
+                    letter-spacing: 2px;
+                    vertical-alignment: center;
+                    background: Theme.accent-red.with-alpha(0.12);
+                    padding-left: 8px; padding-right: 8px;
+                    border-radius: 4px;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Text {
+                    text: tools.length + " tools";
+                    color: Theme.text-muted; font-size: 11px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        // ── Body ──────────────────────────────────────────────────────
+        HorizontalLayout {
+            spacing: 0px;
+
+            // ── Sidebar ───────────────────────────────────────────────
+            Rectangle {
+                width: Theme.sidebar-w;
+                background: Theme.bg-tertiary;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 2px;
+
+                    Text {
+                        text: "CATEGORIES";
+                        color: Theme.text-muted;
+                        font-size: 9px; font-weight: 700;
+                        letter-spacing: 2px;
+                        padding-bottom: 8px;
+                    }
+
+                    for cat in categories : CategoryItem {
+                        label: cat;
+                        count: 0;
+                        selected: cat == root.active-category;
+                        accent: Theme.accent-red;
+                        clicked => {
+                            root.active-category = cat;
+                            root.category-changed(cat);
+                        }
+                    }
+
+                    Rectangle { vertical-stretch: 1; }
+
+                    // Container status in sidebar
+                    Rectangle {
+                        height: 1px; background: Theme.border;
+                        margin-bottom: 8px;
+                    }
+                    Text {
+                        text: "CONTAINER";
+                        color: Theme.text-muted;
+                        font-size: 9px; font-weight: 700; letter-spacing: 2px;
+                    }
+                    Rectangle {
+                        height: 32px;
+                        border-radius: Theme.radius-sm;
+                        background: container-running
+                            ? Theme.accent-green.with-alpha(0.1)
+                            : Theme.bg-hover;
+                        border-width: 1px;
+                        border-color: container-running
+                            ? Theme.accent-green.with-alpha(0.3)
+                            : Theme.border;
+                        HorizontalLayout {
+                            padding-left: 10px; spacing: 8px;
+                            Rectangle {
+                                width: 6px; height: 6px; border-radius: 3px;
+                                background: container-running ? Theme.accent-green : Theme.danger;
+                                y: (parent.height - 6px) / 2;
+                            }
+                            Text {
+                                text: container-running ? "Running" : "Stopped";
+                                color: container-running ? Theme.accent-green : Theme.text-muted;
+                                font-size: 11px; vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Main content ───────────────────────────────────────────
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 0px;
+
+                // Search + filter bar
+                Rectangle {
+                    height: 56px;
+                    background: Theme.bg-secondary;
+                    border-width: 1px;
+                    border-color: Theme.border;
+                    padding-top: 8px; padding-bottom: 8px; padding-left: 16px; padding-right: 16px;
+
+                    HorizontalLayout {
+                        spacing: 10px;
+                        padding-left: 16px; padding-right: 16px;
+
+                        // Search
+                        Rectangle {
+                            horizontal-stretch: 1; max-width: 400px;
+                            height: 36px;
+                            border-radius: Theme.radius-sm;
+                            background: Theme.bg-input;
+                            border-width: 1px; border-color: Theme.border;
+
+                            HorizontalLayout {
+                                padding-left: 12px; spacing: 8px;
+                                Text {
+                                    text: "🔍"; font-size: 13px;
+                                    color: Theme.text-muted;
+                                    vertical-alignment: center;
+                                }
+                                LineEdit {
+                                    placeholder-text: "Search tools…";
+                                    horizontal-stretch: 1;
+                                    edited(text) => { root.search-changed(text); }
+                                }
+                            }
+                        }
+
+                        Rectangle { horizontal-stretch: 1; }
+
+                        // Stats
+                        Text {
+                            text: "⚔  " + tools.length + " Red Team tools";
+                            color: Theme.accent-red;
+                            font-size: 12px; font-weight: 700;
+                            vertical-alignment: center;
+                            background: Theme.accent-red.with-alpha(0.08);
+                            padding-left: 12px; padding-right: 12px;
+                            border-radius: Theme.radius-sm;
+                        }
+                    }
+                }
+
+                // Container strip
+                Rectangle {
+                    height: 44px; padding-top: 8px; padding-bottom: 8px; padding-left: 16px; padding-right: 16px;
+                    background: Theme.bg-primary;
+                    border-width: 1px;
+                    border-color: Theme.border;
+
+                    ContainerStrip {
+                        running: root.container-running;
+                        engine: root.container-engine;
+                        toggle => { root.container-toggle(); }
+                    }
+                }
+
+                // Tool grid
+                ScrollView {
+                    vertical-stretch: 1;
+
+                    Rectangle {
+                        background: Theme.bg-primary;
+                        padding: 20px;
+
+                        // Grid — 3 columns
+                        VerticalLayout {
+                            spacing: 12px;
+
+                            // Section header
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: root.active-category == "All"
+                                        ? "All Red Team Tools"
+                                        : root.active-category;
+                                    color: Theme.text-primary;
+                                    font-size: 16px; font-weight: 800;
+                                }
+                                Text {
+                                    text: "— " + tools.length + " tools available";
+                                    color: Theme.text-muted;
+                                    font-size: 14px;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            Text {
+                                text: "Click a tool to see details and run it. ▶ to launch directly.";
+                                color: Theme.text-muted; font-size: 11px;
+                            }
+
+                            // Tool cards — horizontal wrapping grid
+                            for tool[i] in tools: ToolCard {
+                                tool: tool;
+                                selected: i == root.selected-tool-index;
+                                clicked => { root.tool-selected(i); }
+                                run => { root.tool-run(tool.command); }
+                                install => { root.tool-install(tool.name); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Detail panel (shown when tool selected) ───────────────
+            if selected-tool-index >= 0 : Rectangle {
+                width: 340px;
+                background: Theme.bg-tertiary;
+                border-width: 1px;
+                border-color: Theme.border;
+                padding: 12px;
+
+                ToolDetail {
+                    tool: tools[selected-tool-index];
+                    run => { root.tool-run(tools[selected-tool-index].command); }
+                    install => { root.tool-install(tools[selected-tool-index].name); }
+                    close-panel => { root.tool-selected(-1); }
+                }
+            }
+        }
+    }
+}
