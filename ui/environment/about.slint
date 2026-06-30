@@ -1,1 +1,137 @@
+import { ScrollView } from "std-widgets.slint";
 
+global AT {
+    out property <color> bg:      #0d0e12;
+    out property <color> bg2:     #13141a;
+    out property <color> surface: #161720;
+    out property <color> border:  #1e2030;
+    out property <color> text:    #e8e9f0;
+    out property <color> text2:   #9098b0;
+    out property <color> text3:   #505870;
+    out property <color> accent:  #ef4444;
+    out property <color> green:   #22c55e;
+    out property <length> r:      8px;
+}
+
+export struct SystemSpec {
+    label: string,
+    value: string,
+    icon: string,
+}
+
+component InfoRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <string> icon: "";
+
+    height: 44px;
+    background: AT.surface;
+    border-radius: AT.r;
+    border-width: 1px; border-color: AT.border;
+
+    HorizontalLayout {
+        padding-left: 14px; padding-right: 14px; spacing: 10px;
+        if icon != "" : Text { text: icon; font-size: 14px; vertical-alignment: center; }
+        Text { text: label; color: AT.text3; font-size: 11px; vertical-alignment: center; horizontal-stretch: 1; }
+        Text { text: value; color: AT.text; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+    }
+}
+
+export component AboutSystemApp inherits Window {
+    title: "About This System";
+    background: AT.bg;
+    width: 520px; height: 600px;
+
+    in property <string> os-name: "HackerOS";
+    in property <string> os-version: "2.0";
+    in property <string> kernel: "6.8.0-hackeros";
+    in property <string> desktop: "CM Environment 0.2";
+    in property <string> cpu: "Intel Core i7";
+    in property <string> cpu-cores: "8";
+    in property <string> ram-total: "16.0 GB";
+    in property <string> ram-used: "4.2 GB";
+    in property <string> gpu: "NVIDIA RTX 4060";
+    in property <string> disk: "512 GB SSD";
+    in property <string> hostname: "hackeros";
+    in property <string> uptime: "2 hours, 14 minutes";
+    in property <string> package-count: "1,842";
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // Header
+        Rectangle {
+            height: 160px;
+            background: AT.bg2;
+            border-width: 1px; border-color: AT.border;
+
+            HorizontalLayout {
+                padding: 30px; spacing: 24px; alignment: center;
+
+                Image {
+                    source: @image-url("/usr/share/HackerOS/ICONS/HackerOS-Cybersecurity.png");
+                    width: 80px; height: 80px; image-fit: contain;
+                }
+
+                VerticalLayout {
+                    spacing: 6px;
+                    Text { text: "HackerOS"; color: AT.text; font-size: 24px; font-weight: 800; }
+                    Text { text: "CM Environment 0.2"; color: AT.text2; font-size: 13px; }
+                    Rectangle {
+                        height: 24px; width: 160px;
+                        border-radius: 5px;
+                        background: AT.accent.with-alpha(0.12);
+                        border-width: 1px; border-color: AT.accent.with-alpha(0.35);
+                        Text { text: "⚔  Red Team Edition"; color: AT.accent;
+                            font-size: 11px; font-weight: 700;
+                            horizontal-alignment: center; vertical-alignment: center; }
+                    }
+                    Text { text: "Immutable · Security-Focused · BSD-3-Clause";
+                        color: AT.text3; font-size: 10px; }
+                }
+            }
+        }
+
+        // System specs
+        ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                padding: 16px; spacing: 6px;
+
+                Text { text: "SYSTEM"; color: AT.text3; font-size: 9px; font-weight: 700; letter-spacing: 2px; padding-bottom: 6px; }
+
+                InfoRow { label: "Operating System"; value: os-name + " " + os-version; icon: "🐧"; }
+                InfoRow { label: "Desktop Environment"; value: desktop; icon: "🖥"; }
+                InfoRow { label: "Kernel"; value: kernel; icon: "⚙"; }
+                InfoRow { label: "Hostname"; value: hostname; icon: "💻"; }
+                InfoRow { label: "Uptime"; value: uptime; icon: "⏱"; }
+
+                Text { text: "HARDWARE"; color: AT.text3; font-size: 9px; font-weight: 700; letter-spacing: 2px; padding-top: 12px; padding-bottom: 6px; }
+
+                InfoRow { label: "Processor"; value: cpu + " (" + cpu-cores + " cores)"; icon: "🔧"; }
+                InfoRow { label: "Memory"; value: ram-used + " used / " + ram-total; icon: "🧠"; }
+                InfoRow { label: "Graphics"; value: gpu; icon: "🎮"; }
+                InfoRow { label: "Storage"; value: disk; icon: "💾"; }
+
+                Text { text: "SOFTWARE"; color: AT.text3; font-size: 9px; font-weight: 700; letter-spacing: 2px; padding-top: 12px; padding-bottom: 6px; }
+
+                InfoRow { label: "Packages Installed"; value: package-count; icon: "📦"; }
+                InfoRow { label: "Stack"; value: "Rust + Slint + Smithay"; icon: "🦀"; }
+                InfoRow { label: "License"; value: "BSD-3-Clause"; icon: "📜"; }
+
+                // Links
+                Rectangle { height: 44px; border-radius: AT.r;
+                    background: AT.green.with-alpha(0.08);
+                    border-width: 1px; border-color: AT.green.with-alpha(0.25);
+                    gh-ta := TouchArea {}
+                    HorizontalLayout {
+                        padding-left: 14px; padding-right: 14px;
+                        Text { text: "🌐  github.com/HackerOS-Linux/HackerOS"; color: AT.green;
+                            font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text { text: "›"; color: AT.text3; font-size: 16px; vertical-alignment: center; }
+                    }
+                }
+            }
+        }
+    }
+}
